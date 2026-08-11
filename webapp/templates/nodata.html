@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="nodata">
+  <h2>No snapshot yet</h2>
+  <p>The dashboard is waiting for its first data snapshot from the updater.
+     Run <code>updater/main.py --ship-only</code> on the Mac to ship one.</p>
+</div>
+{% endblock %}

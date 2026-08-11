@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block content %}
+
+{% set stale = meta.values() | selectattr('status', 'ne', 'ok') | list %}
+{% if stale %}
+<div class="stale-banner">
+  Some metrics did not refresh in the last run:
+  {% for m in stale %}<span class="stale-chip" title="{{ m.error or '' }}">{{ m.metric }}</span>{% endfor %}
+  — charts show the last good data.
+</div>
+{% endif %}
+
+{% macro f_field(dim, short) %}
+{% if dim in filter_options and dim in page_dims %}
+<div class="f-field" data-dim="{{ dim }}">
+  <span class="f-lvl">{{ short }}</span>
+  <span class="fg-chips"></span>
+  <input list="dl-{{ dim }}" class="fg-input" placeholder="all" autocomplete="off">
+  <datalist id="dl-{{ dim }}"></datalist>
+  {% for v in selected.get(dim, []) %}
+  <input type="hidden" name="{{ dim }}" value="{{ v }}">
+  {% endfor %}
+</div>
+{% endif %}
+{% endmacro %}
+
+{% set cat_dims_here = ['category_l1','category_l2','category_l3','category_l4']
+       | select('in', page_dims) | select('in', filter_options) | list %}
+{% set fin_dims_here = ['finance_l1','finance_l2']
+       | select('in', page_dims) | select('in', filter_options) | list %}
+{% set other_dims_here = ['seller_type','revenue_stream']
+       | select('in', page_dims) | select('in', filter_options) | list %}
+
+{% if cat_dims_here or fin_dims_here or 'region' in page_dims or other_dims_here %}
+<details class="filters-panel" {{ 'open' if n_active_filters }}>
+  <summary>
+    <span class="filters-title">Filters</span>
+    {% if n_active_filters %}<span class="filters-count">{{ n_active_filters }} active</span>
+    {% else %}<span class="filters-hint">showing everything</span>{% endif %}
+    <span class="grain-toggle pl-toggle" onclick="event.stopPropagation()">
+      {% for gp, glabel in (('day', 'Day'), ('week', 'Week'), ('month', 'Month')) %}
+      <a href="{{ grain_urls[gp] }}"
+         class="{{ 'active' if gp == grain_param }}">{{ glabel }}</a>
+      {% endfor %}
+    </span>
+  </summary>
+  <form method="get" action="{{ request.path }}" id="filter-form">
+    {% if grain_param != 'month' %}<input type="hidden" name="grain" value="{{ grain_param }}">{% endif %}
+    {% if cat_dims_here %}
+    <div class="f-row">
+      <label class="f-row-label">Category</label>
+      {{ f_field('category_l1', 'L1') }}{{ f_field('category_l2', 'L2') }}
+      {{ f_field('category_l3', 'L3') }}{{ f_field('category_l4', 'L4') }}
+    </div>
+    {% endif %}
+    {% if fin_dims_here %}
+    <div class="f-row">
+      <label class="f-row-label">Finance category</label>
+      {{ f_field('finance_l1', 'L1') }}{{ f_field('finance_l2', 'L2') }}
+    </div>
+    {% endif %}
+    {% if 'region' in page_dims and 'region' in filter_options %}
+    <div class="f-row">
+      <label class="f-row-label">Region</label>
+      {{ f_field('region', '') }}
+    </div>
+    {% endif %}
+    {% if other_dims_here %}
+    <div class="f-row">
+      <label class="f-row-label">More</label>
+      {% for d in other_dims_here %}{{ f_field(d, dict(dim_labels).get(d, d)) }}{% endfor %}
+    </div>
+    {% endif %}
+    <div class="f-row f-actions">
+      <button type="submit">Apply</button>
+      {% if n_active_filters %}<a class="filters-clear" href="{{ request.path }}">Clear all</a>{% endif %}
+    </div>
+  </form>
+</details>
+{% endif %}
+{% if filter_note %}<div class="filter-note">{{ filter_note }}</div>{% endif %}
+<script>
+window.FILTER_OPTIONS = {{ filter_options | tojson }};
+window.CATEGORY_TREE = {{ category_tree | tojson }};
+</script>
+
+{% if page.cards %}
+<section class="cards">
+  {% for card in page.cards %}
+  <div class="card">
+    <div class="card-label">{{ card.label }}
+      {% if card.info %}<button class="info-btn" type="button" data-info="{{ card.info }}">i</button>{% endif %}
+      {% if card.badge %}<span class="fallback" title="How the filter was applied to this metric">{{ card.badge }}</span>{% endif %}
+    </div>
+    {% if card.kpi %}
+    <div class="card-value" data-value="{{ card.kpi.value }}" data-fmt="{{ card.fmt or 'num' }}">
+      {%- if card.unit %}<span class="card-unit">{{ card.unit }}</span>{% endif -%}
+    </div>
+    {% set dlabels = card.kpi.labels or ['MoM', 'YoY'] %}
+    <div class="card-deltas">
+      <span class="delta" data-delta="{{ card.kpi.mom if card.kpi.mom is not none else '' }}">{{ dlabels[0] }}</span>
+      <span class="delta" data-delta="{{ card.kpi.yoy if card.kpi.yoy is not none else '' }}">{{ dlabels[1] }}</span>
+      <span class="card-period">{{ card.kpi.period }}</span>
+    </div>
+    <div class="spark-holder"><canvas class="spark" data-spark='{{ card.kpi.spark | tojson }}'></canvas></div>
+    {% else %}
+    <div class="card-value none">–</div>
+    <div class="card-deltas"><span class="card-period">no data</span></div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+<section class="charts">
+  {% for chart in page.charts %}
+  <figure class="chart-card" data-chart='{{ chart | tojson }}'>
+    <figcaption>{{ chart.title }}{% if chart.unit %} <span class="unit">({{ chart.unit }})</span>{% endif %}
+      {% if chart.info %}<button class="info-btn" type="button" data-info="{{ chart.info }}">i</button>{% endif %}
+      <button class="fs-btn" type="button" title="Fullscreen">⤢</button>
+    </figcaption>
+    <div class="chart-holder"><canvas></canvas></div>
+    {% if chart.note %}<div class="chart-note">{{ chart.note }}</div>{% endif %}
+  </figure>
+  {% endfor %}
+</section>
+
+<script src="{{ url_for('static', filename='chart.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='dashboard.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+updater/store/*.sqlite
+updater/store/*.sqlite.*
+config/deploy.env
+webapp/kpi.env
+logs/
+.DS_Store
+kpi.env
+google_login.env
+data/
+.venv/
+updater/store/
+*.sqlite
+nohup.out

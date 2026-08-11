@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OLX UZ KPI — Log in</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="login-page">
+<div class="login-box">
+  <h1>OLX UZ — KPI Dashboard</h1>
+  {% if google %}
+  <a href="{{ url_for('auth_start', next=next) }}"
+     style="display:block;text-align:center;padding:10px 14px;margin:14px 0;
+            background:#fff;color:#1a1a1a;border:1px solid #dadce0;border-radius:6px;
+            font-weight:600;text-decoration:none">
+    Sign in with Google <span style="color:#5f6368;font-weight:400">(tteam.pro)</span>
+  </a>
+  {% endif %}
+  {% if error %}<div class="login-error">{{ error }}</div>{% endif %}
+  {% if show_password %}
+  <form method="post" action="{{ url_for('login', next=next) }}">
+    <input type="password" name="password" placeholder="Password" autocomplete="current-password">
+    <button type="submit">Enter</button>
+  </form>
+  {% endif %}
+</div>
+</body>
+</html>

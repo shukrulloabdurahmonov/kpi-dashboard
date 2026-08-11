@@ -1,0 +1,35 @@
+# Droplet stack: Flask/gunicorn app + Caddy (auto-HTTPS on the DuckDNS domain).
+# The Mac updater ships data/snapshot.sqlite next to this file (atomic mv);
+# the app container sees it through a read-only bind mount.
+#
+# Requires on the droplet, next to this file:
+#   .env      — DOMAIN=<sub>.duckdns.org      (compose interpolation)
+#   kpi.env   — SECRET_KEY=..., KPI_PASSWORD_HASH=...   (app secrets)
+#   data/     — snapshot landing directory
+
+services:
+  web:
+    build: ./webapp
+    restart: unless-stopped
+    env_file: kpi.env
+    volumes:
+      - ./data:/data:ro
+    expose:
+      - "8000"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:
