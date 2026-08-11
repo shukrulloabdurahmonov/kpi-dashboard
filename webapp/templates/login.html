@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OLX UZ KPI — Log in</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="login-page">
+<form class="login-box" method="post">
+  <h1>OLX UZ — KPI Dashboard</h1>
+  <input type="password" name="password" placeholder="Password" autofocus autocomplete="current-password">
+  {% if error %}<div class="login-error">{{ error }}</div>{% endif %}
+  <button type="submit">Enter</button>
+</form>
+</body>
+</html>

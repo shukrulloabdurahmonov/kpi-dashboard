@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="dict-title">Data dictionary</h2>
+<p class="dict-intro">
+  Every metric on this dashboard, its definition and lineage. All numbers are
+  pre-aggregated in the warehouse for OLX UZ (<code>site_sk = 'olx|eu|uz'</code>);
+  each filter slice is computed independently, so distinct counts are always exact
+  and never re-aggregated. Monthly history: 24 months. Daily history: 90 days.
+</p>
+<div class="dict-wrap">
+<table class="dict">
+  <thead>
+    <tr><th>Metric</th><th>Definition</th><th>Formula</th><th>Source</th>
+        <th>Grain</th><th>Filterable by</th><th>Notes</th></tr>
+  </thead>
+  <tbody>
+    {% for e in entries %}
+    <tr id="def-{{ e.metric }}">
+      <td class="dict-name">{{ e.label }}</td>
+      <td>{{ e.definition }}</td>
+      <td><code>{{ e.formula }}</code></td>
+      <td><code>{{ e.source }}</code></td>
+      <td>{{ e.grain }}</td>
+      <td>{{ e.dims }}</td>
+      <td>{{ e.caveats }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

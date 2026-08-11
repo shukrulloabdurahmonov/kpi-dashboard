@@ -1,0 +1,163 @@
+# OLX UZ KPI Dashboard
+
+Web dashboard of OLX UZ health metrics (Ariadne KPI definitions), live on a
+DigitalOcean droplet in Docker. The Redshift warehouse (`yamato`) is only
+reachable from this Mac over VPN, so data flows **push-style**:
+
+```
+Mac (07:00 cron, VPN) ──queries──▶ yamato Redshift
+        │ builds updater/store/metrics_store.sqlite
+        │ snapshot + integrity check
+        └─scp──▶ droplet:/srv/kpi/data/snapshot.sqlite (atomic mv)
+                        │
+              docker compose: web (Flask/gunicorn, read-only)
+                             caddy (auto-HTTPS on DuckDNS domain)
+```
+
+The droplet never touches the warehouse. If the Mac/VPN is down, the
+dashboard simply serves yesterday's snapshot and the freshness badge ages.
+
+## Layout
+
+- `sql/` — ONE unified query template per metric family (`%(site)s`,
+  `%(start)s`, `%(end)s` end-exclusive; `{period_expr}`/`{date_expr}`/`{dim_*}`
+  placeholders filled per grain × dimension by `updater/extract.py`).
+  Adapted from `../ariadne-kpis-definitions-master/` with fixes
+  (site filters added, `Active_Listings.sql` syntax bug, real warehouse
+  schema: `fact_replies_success_legacy`, liquidity cohorts keyed on
+  `first_active_date_nk`).
+
+### Time grains
+
+Every metric family extracts at three grains — **monthly (24 months),
+weekly (26 weeks, Monday-keyed), daily (90 days)** — each an exact Redshift
+aggregate (weekly distinct counts like WAU cannot be summed from dailies).
+Active users is `mau` / `wau` / `dau` per grain. Cohort maturity guards apply
+per grain (a week appears once its Sunday is mature). Retention windows are
+pruned after every run. The webapp's **Day | Week | Month** toggle (filter
+panel, `?grain=`) re-buckets all cards and trend charts with grain-appropriate
+deltas (MoM/YoY · WoW/vs-4w · DoD/vs-7d); snapshot charts (breakdowns, map,
+matrix, MoM growth) stay monthly and say so.
+
+### Filter dimensions
+
+Monthly metrics are extracted per dimension slice (each an independent exact
+Redshift aggregate — distinct counts are never re-aggregated client-side):
+finance category L1/L2 and category L1–L4 (`eu_bi.dim_categories`), region
+(13 UZ viloyats, `dim_geographies.geography_l1_name_en`), seller type
+(B2C/C2C), revenue stream (payments only). Cross-dimension **pair slices**
+(finance/category L1–L2 × region, finance L2 × seller type) are also
+precomputed so two-dimensional filters stay exact. Player metrics
+additionally carry daily slices for finance/category L1–L2. Audience metrics
+carry no region — `fact_audience_categories` has no geography.
+`category_tree` (distinct hierarchy paths from `dim_categories`) refreshes
+every run and powers the cascading filter lists.
+
+The webapp's **collapsible filter panel** has dedicated rows (Category L1–L4
+cascading, Finance L1–L2, Region, More) — multi-value chips, empty = all,
+rows shown only when the page's metrics carry that dimension. The constraint
+engine collapses each family to its deepest level, uses pair slices for
+two-dim combinations, sums additive metrics across multiple values exactly,
+and marks unavoidable compromises visibly ("≈ summed" for distinct counts,
+"<dim> n/a", "site total").
+
+The `/dictionary` tab documents every metric (definition, formula, source,
+grain, filterable dims, caveats) — same content as the per-card ⓘ popovers,
+maintained in `webapp/definitions.py`.
+
+### Visualizations
+
+Stat tiles with MoM/YoY + sparklines; line/area trends with crosshair
+tooltips and end labels; stacked compositions; diverging MoM-growth bars;
+horizontal category bars; **Uzbekistan choropleth** (vendored
+`webapp/static/uz_regions.json`, geoBoundaries ADM1 simplified); category ×
+month **matrix heatmaps**; DAU weekday **calendar heatmap**; instant hover
+tooltips on all map/heatmap cells; per-chart **fullscreen** toggle (⤢/Esc).
+
+### Timeline Player (`/player`)
+
+Animates metric composition over time: metric selector, dimension
+(fin L1/L2, cat L1/L2), day|month grain, bar|sunburst (two-ring: L1 inner,
+L2 outer, exact L1 slices — never client-side sums), date slider,
+play/pause with 0.5×/1×/2× speed, grain-snap. Colors are stable per category
+across frames and chart types. Data served by `/player/data` from the same
+snapshot.
+- `updater/` — Mac-side engine. `registry.py` lists every metric spec;
+  `main.py` is the cron entry point.
+- `webapp/` — Flask app (droplet-side, Dockerized). Reads only the snapshot.
+- `deploy/` — droplet setup + deploy scripts, Caddyfile.
+- `config/settings.py` — site, windows, retention. `config/deploy.env` —
+  droplet host/ssh (copy from `deploy.env.example`, gitignored).
+
+## Updater commands (run from this dir, VPN required)
+
+```bash
+/usr/bin/python3 -m updater.probes            # schema + count + triton probes
+/usr/bin/python3 -m updater.main --backfill --local-only   # first 24m fill (resumable)
+/usr/bin/python3 -m updater.main              # nightly: rolling refresh + build + ship
+/usr/bin/python3 -m updater.main --ship-only  # re-ship snapshot without querying
+/usr/bin/python3 -m updater.main --only nnl,active_users@weekly  # spec[@grain] subset
+```
+
+Exit codes: 0 ok · 1 fatal (VPN down / ship failed) · 2 partial (some metrics
+stale — snapshot still ships, dashboard shows amber chips).
+
+Robustness: single reused psycopg2 connection (psycopg2 only — psycopg3
+breaks on this warehouse's client_encoding); every result is pre-aggregated
+in Redshift (never near the 5M-row WLM limit); 3 retries with backoff per
+chunk + reconnect on dead connection; per-metric failure isolation; chunk
+writes are atomic (DELETE range + INSERT in one transaction) so interrupted
+runs resume safely; cohort metrics (liquidity, first-time listers) only
+extract matured cohorts.
+
+## Local webapp dev
+
+```bash
+KPI_SNAPSHOT=updater/store/snapshot.sqlite.building \
+  /usr/bin/python3 -m flask --app webapp.app run --port 5050 --debug
+# password 'dev' when KPI_PASSWORD_HASH is unset
+```
+
+Or the full Docker stack: `docker build webapp/`, run with `-v <dir>:/data:ro`.
+
+## Droplet deployment
+
+**Step-by-step guide: [`deploy/DEPLOY.md`](deploy/DEPLOY.md)** — follow it
+when deploying on the VPS. Summary below.
+
+## Droplet (one-time)
+
+1. DuckDNS: register a subdomain → droplet IP, keep the token.
+2. Copy `deploy/setup_droplet.sh` to the droplet and run as root:
+   ```bash
+   DOMAIN=<sub>.duckdns.org DUCKDNS_SUBDOMAIN=<sub> DUCKDNS_TOKEN=<token> \
+   KPI_PASSWORD_HASH='<from deploy/make_password_hash.py>' ./setup_droplet.sh
+   ```
+   (installs Docker, creates /srv/kpi/{data,.env,kpi.env}, DuckDNS cron)
+3. Fill `config/deploy.env` on the Mac; make sure the Mac's ssh key is on the
+   droplet.
+
+## Deploy + ship
+
+```bash
+deploy/deploy.sh                              # rsync + docker compose up -d --build
+/usr/bin/python3 -m updater.main --ship-only  # push current snapshot
+curl https://<sub>.duckdns.org/health
+```
+
+## Nightly cron (Mac)
+
+`~/Automations/Tasks/kpi_dashboard_update/` (task.conf `0 7 * * *` + run.sh).
+Register by rerunning `~/Automations/update_workflow.sh`; logs land in
+`Tasks/kpi_dashboard_update/logs/execution.log`.
+
+## Notes
+
+- Every dimension level (total / category / seller_type / revenue_stream) is
+  deduplicated independently in Redshift. Rows are display-only — never sum
+  them across periods or dimension values.
+- Monthly charts drop the current partial month; KPI cards compare the last
+  full month (MoM / YoY). Liquidity rate = liquid listings ÷ NNL per posting
+  cohort month, mature cohorts only.
+- `meta` table drives the per-metric stale chips; `snapshot_info.built_at_utc`
+  drives the header freshness badge (green <36h, amber <72h, red after).

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OLX UZ — KPI Dashboard</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">OLX UZ <span>health metrics</span></div>
+  <nav class="tabs">
+    {% for tab_id, path, label in tabs %}
+    <a href="{{ path }}{% if filter_qs is defined and filter_qs and tab_id != 'dictionary' %}{{ filter_qs }}{% endif %}"
+       class="tab {{ 'active' if tab_id == active }}">{{ label }}</a>
+    {% endfor %}
+  </nav>
+  <div class="topbar-right">
+    {% if freshness %}
+    <span class="fresh fresh-{{ freshness }}" title="Snapshot built {{ built_at }} UTC">
+      {% if age_hours is not none %}data {{ age_hours }}h old{% else %}no data{% endif %}
+    </span>
+    {% endif %}
+    <a class="logout" href="{{ url_for('logout') }}">Log out</a>
+  </div>
+</header>
+<main>
+{% block content %}{% endblock %}
+</main>
+</body>
+</html>

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="player-controls">
+  <label>Metric
+    <select id="pl-metric">
+      {% for m in metric_options %}
+      <option value="{{ m.key }}" data-grains="{{ m.grains | join(',') }}">{{ m.label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Dimension
+    <select id="pl-dim">
+      {% for d, lbl in player_dims %}
+      <option value="{{ d }}">{{ lbl }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <div class="pl-toggle" id="pl-grain">
+    <button type="button" data-value="daily">day</button>
+    <button type="button" data-value="weekly">week</button>
+    <button type="button" data-value="monthly" class="active">month</button>
+  </div>
+  <div class="pl-toggle" id="pl-kind">
+    <button type="button" data-value="bar" class="active">bar</button>
+    <button type="button" data-value="sunburst">sunburst</button>
+  </div>
+  <button id="pl-play" class="pl-play" type="button">▶</button>
+  <div class="pl-toggle" id="pl-speed">
+    <button type="button" data-value="0.5">0.5×</button>
+    <button type="button" data-value="1" class="active">1×</button>
+    <button type="button" data-value="2">2×</button>
+  </div>
+  <span class="pl-date" id="pl-date">–</span>
+</div>
+
+<div class="player-slider-row">
+  <input type="range" id="pl-slider" min="0" max="0" value="0" step="1">
+</div>
+
+<figure class="chart-card player-card">
+  <figcaption id="pl-title">Composition</figcaption>
+  <div class="chart-holder player-holder"><canvas id="pl-canvas"></canvas></div>
+  <div class="chart-note">Snapshot composition for the selected date — not a running total.
+    Colors are stable per category across frames and chart types.
+    Distinct-count metrics show the exact L1 slice as the inner ring (never a sum of children).</div>
+</figure>
+
+<script src="{{ url_for('static', filename='chart.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='player.js') }}"></script>
+{% endblock %}
