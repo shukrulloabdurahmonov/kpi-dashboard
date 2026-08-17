@@ -1,7 +1,8 @@
 """OLX UZ KPI dashboard — Flask app.
 
 Reads the read-only SQLite snapshot (shipped daily from the Mac updater);
-never touches the warehouse. Shared-password session login.
+never touches the warehouse. Shared-password session login, plus a Google
+ID-token gate at /gate/verify (client ID from GOOGLE_LOGIN_CLIENT_ID).
 
 Every tab carries a dimension filter (?dim=...&value=...). All slices were
 pre-aggregated in Redshift, so a filter just selects a different set of
@@ -20,6 +21,8 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from webapp import data
 from webapp.definitions import METRIC_DEFS, info
+
+GOOGLE_LOGIN_CLIENT_ID = os.environ.get("GOOGLE_LOGIN_CLIENT_ID")
 
 TABS = [
     ("overview", "/", "Overview"),
@@ -672,7 +675,7 @@ def create_app():
 
     @app.before_request
     def require_login():
-        if request.endpoint in ("login", "health", "static"):
+        if request.endpoint in ("login", "gate_verify", "health", "static"):
             return None
         if not session.get("authed"):
             return redirect(url_for("login", next=request.path))
@@ -689,6 +692,28 @@ def create_app():
             time.sleep(1)  # slow down brute force
             error = "Wrong password"
         return render_template("login.html", error=error)
+
+    @app.route("/gate/verify", methods=["POST"])
+    def gate_verify():
+        payload = request.get_json(silent=True) or request.form
+        token = payload.get("credential")
+        if not token:
+            return jsonify({"ok": False, "error": "no token"}), 400
+        if not GOOGLE_LOGIN_CLIENT_ID:
+            return jsonify({"ok": False, "error": "gate not configured"}), 503
+        # google-auth is only needed here; deferred import keeps the app
+        # importable in environments where it isn't installed.
+        from google.oauth2 import id_token
+        from google.auth.transport import requests as google_requests
+        try:
+            claims = id_token.verify_oauth2_token(
+                token, google_requests.Request(), GOOGLE_LOGIN_CLIENT_ID)
+        except ValueError:
+            return jsonify({"ok": False, "error": "invalid token"}), 401
+        session["authed"] = True
+        session["email"] = claims.get("email")
+        session.permanent = True
+        return jsonify({"ok": True, "email": claims.get("email")})
 
     @app.route("/logout")
     def logout():
