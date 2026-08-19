@@ -2,7 +2,7 @@
 -- the treemap/heatmap source. Same shape as daily_by_category.sql at month
 -- grain. {start} = ISO date (first of month) injected by search_extract.py.
 SELECT
-  DATE_TRUNC('month', l.date_day) AS month,
+  DATE_TRUNC('month', CAST(l.date_day AS DATE)) AS month,
   CASE
     WHEN l.platform = 'android' THEN 'Android'
     WHEN l.platform = 'ios' THEN 'iOS'

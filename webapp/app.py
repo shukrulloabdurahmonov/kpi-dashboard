@@ -735,8 +735,10 @@ def _search_kwtable():
     payload = data.search_keywords()
     if not payload["rows"]:
         return None
+    hydra_disp = {"web": "Web", "android": "Android", "ios": "iOS"}
     rows = []
     for platform, kw, searches, zsr, low, avg_results in payload["rows"]:
+        platform = hydra_disp.get(platform, platform)
         rows.append([kw, platform, searches,
                      round(zsr / searches * 100.0, 1) if searches else None,
                      round(low / searches * 100.0, 1) if searches else None,
@@ -757,6 +759,18 @@ def _search_kwtable():
         "note": "First-page keyword SERPs, bot-filtered. " + ZSR_PLATFORM_NOTE,
         "info": info("search_keywords_table"),
     }
+
+
+def _method_volume_stacked(wk, methods):
+    series = [{"label": m, "points": data.series_at("search_volume", wk, "method", m)}
+              for m in methods]
+    series = [s for s in series if s["points"]]
+    if not series:
+        return None
+    return {"kind": "stacked", "title": "Search volume by method", "unit": None,
+            "grain": wk, "note": "Avg daily searches; methods are additive "
+                                 "(each search has exactly one method).",
+            "series": series, "info": info("search_volume")}
 
 
 def build_search():
@@ -800,12 +814,7 @@ def build_search():
         _s_line("Search volume",
                 [wk_series("search_volume", "total", data.TOTAL, "Searches")],
                 wk, area=True, note=AVG_DAILY_NOTE, info_key="search_volume"),
-        {"kind": "stacked", "title": "Search volume by method", "unit": None,
-         "grain": wk, "note": "Avg daily searches; methods are additive "
-                              "(each search has exactly one method).",
-         "series": [wk_series("search_volume", "method", m) for m in methods
-                    if data.series_at("search_volume", wk, "method", m)],
-         "info": info("search_volume")},
+        _method_volume_stacked(wk, methods),
         _s_line("Method share of platform searchers",
                 [wk_series("search_share_on_platform", "method", m)
                  for m in methods],

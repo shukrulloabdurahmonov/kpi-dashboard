@@ -312,6 +312,21 @@ def region_names(wh):
     return out
 
 
+def month_chunks(d1, d2):
+    """[(iso_start, iso_end)] month-aligned inclusive chunks covering [d1, d2]
+    — hydra scans over the full history get killed by WLM; per-month they
+    finish in minutes (same approach as zsr_dashboard)."""
+    chunks = []
+    cur = date.fromisoformat(d1)
+    end = date.fromisoformat(d2)
+    while cur <= end:
+        nxt = (cur.replace(day=1) + timedelta(days=32)).replace(day=1)
+        chunks.append((cur.isoformat(),
+                       min(nxt - timedelta(days=1), end).isoformat()))
+        cur = nxt
+    return chunks
+
+
 def pull_hydra_regions(wh, d1, d2, daily_from):
     """search_serp / search_zsr / search_zsr_low rows: monthly region splits
     (map + per-region bars) and daily platform trends."""
@@ -323,14 +338,20 @@ def pull_hydra_regions(wh, d1, d2, daily_from):
         key = (metric, grain, period, dim_name, dim_value)
         agg[key] = agg.get(key, 0) + v
 
+    chunks = month_chunks(d1, d2)
     for platform, predicate in HYDRA_PLATFORMS.items():
-        sql = template.format(platform=platform, table=platform,
-                              serp_predicate=predicate, d1=d1, d2=d2,
-                              low_min=LOW_MIN, low_max=LOW_MAX,
-                              sentinel=SENTINEL, bot_filter=BOT_FILTER)
-        cols, rows = wh.query(sql, None)
         disp = HYDRA_PLATFORM_DISPLAY[platform]
-        for r in dictrows(cols, rows):
+        rows_dicts = []
+        for c1, c2 in chunks:
+            sql = template.format(platform=platform, table=platform,
+                                  serp_predicate=predicate, d1=c1, d2=c2,
+                                  low_min=LOW_MIN, low_max=LOW_MAX,
+                                  sentinel=SENTINEL, bot_filter=BOT_FILTER)
+            cols, rows = wh.query(sql, None)
+            rows_dicts.extend(dictrows(cols, rows))
+            log.info("[regions@%s] chunk %s..%s: %d rows",
+                     platform, c1, c2, len(rows))
+        for r in rows_dicts:
             day = str(r["day"])[:10]
             month = month_key(date.fromisoformat(day))
             region = regions.get(int(r["region_id"] or 0))
@@ -361,9 +382,10 @@ def pull_hydra_keywords(wh, d1, d2):
                               top_n=KEYWORD_TOP_N,
                               min_searches=KEYWORD_MIN_SEARCHES)
         _, rows = wh.query(sql, None)
-        out.extend((p, kw, int(s), int(z), int(lo),
+        disp = HYDRA_PLATFORM_DISPLAY[platform]
+        out.extend((disp, kw, int(s), int(z), int(lo),
                     round(float(a), 1) if a is not None else None)
-                   for p, kw, s, z, lo, a in rows)
+                   for _p, kw, s, z, lo, a in rows)
         log.info("[keywords@%s] %d keywords", platform, len(rows))
     return out
 

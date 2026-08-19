@@ -5,6 +5,16 @@
 cd /home/claude/olx_uz_kpi_dashboard
 export PYTHONPATH=/home/claude/olx_uz_kpi_dashboard
 
+# Search dashboard data arrives via git as payloads/search_payload.sqlite
+# (the Mac extracts it from Trino + hydra, which this box can't reach).
+# Merge is idempotent — re-merging the same payload is a cheap no-op — so do
+# it every night before the refresh; the publish below then carries it.
+if [ -f payloads/search_payload.sqlite ]; then
+  echo "[$(date -u +%FT%TZ)] merging search payload" >> logs/updater.log
+  python3 -m updater.search_merge payloads/search_payload.sqlite >> logs/updater.log 2>&1 \
+    || echo "[$(date -u +%FT%TZ)] search merge FAILED (non-fatal)" >> logs/updater.log
+fi
+
 for attempt in 1 2 3; do
   echo "[$(date -u +%FT%TZ)] nightly refresh attempt $attempt" >> logs/updater.log
   python3 -m updater.main --local-only >> logs/updater.log 2>&1

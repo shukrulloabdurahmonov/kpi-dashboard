@@ -131,6 +131,18 @@ so they bypass the MetricSpec registry (see `updater/search_common.py`):
 The extractor writes `updater/store/search_payload.sqlite`, merges it into
 the local store, then (unless `--local-only`) scp's it to the box where
 `python3 -m updater.search_merge <payload> --republish` merges + republishes.
+
+**Git channel (no scp/ssh setup needed):** commit the payload instead —
+
+```bash
+cp updater/store/search_payload.sqlite payloads/
+git add payloads/search_payload.sqlite && git commit -m "search payload $(date +%F)" && git push
+```
+
+The box's `nightly_update.sh` merges `payloads/search_payload.sqlite` into
+its store before every refresh (idempotent), so the next nightly publish
+carries it; for immediate effect run the merge on the box by hand with
+`--republish`. The payload is a few MB — fine for git.
 Search rows carry the `search_` metric prefix: the registry's retention
 pruning exempts them, and `search_merge` enforces its own 90-day retention on
 the daily grain. All `*_tgv` source columns are dropped (always 0 for UZ).
