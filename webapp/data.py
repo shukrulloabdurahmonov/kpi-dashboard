@@ -249,7 +249,13 @@ NON_ADDITIVE = {
     "bounces_per_category", "entering_visits",
     "ftl_success_listers_14d_3r",
 } | {"liquid_listers_%s_%s" % (w, r)
-     for w in ("7d", "14d", "28d") for r in ("1r", "3r")}
+     for w in ("7d", "14d", "28d") for r in ("1r", "3r")} \
+  | {  # search rollups: avg-daily user counts and ratio metrics (never sum)
+    "search_users", "search_users_adview", "search_users_lead",
+    "search_volume", "search_volume_adview", "search_volume_lead",
+    "search_ssu_adview", "search_ssu_lead",
+    "search_avg_adview_su", "search_avg_lead_su", "search_share_on_platform",
+}
 
 
 def filter_options():
@@ -263,6 +269,7 @@ def _filter_options():
         rows = conn.execute(
             "SELECT DISTINCT dim_name, dim_value FROM metrics "
             "WHERE grain = 'monthly' AND dim_name != 'total' "
+            "AND metric NOT LIKE 'search_%' "   # search dims are page-local
             "ORDER BY dim_name, dim_value"
         ).fetchall()
     out = {}
@@ -470,6 +477,21 @@ def kpi_from_points(points, grain="monthly", spark=None):
         "spark": (spark if spark is not None else full[-13:]),
         "spark_grain": grain,
     }
+
+
+def search_keywords():
+    """Top-keywords rows for the Search dashboard, with their 28d window.
+    Empty result when the snapshot predates the search_keywords table."""
+    try:
+        with _conn() as conn:
+            rows = [list(r) for r in conn.execute(
+                "SELECT platform, keyword, searches, zsr, low, avg_results "
+                "FROM search_keywords ORDER BY searches DESC")]
+    except sqlite3.Error:
+        return {"window": [None, None], "rows": []}
+    info = snapshot_info()
+    return {"window": [info.get("search_kw_start"), info.get("search_kw_end")],
+            "rows": rows}
 
 
 def ratio_at(numerator, denominator, grain="monthly", as_pct=True):

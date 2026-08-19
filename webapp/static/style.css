@@ -76,8 +76,15 @@ body {
   z-index: 10;
   flex-wrap: wrap;
 }
-.brand { font-weight: 650; font-size: 15px; white-space: nowrap; }
-.brand span { color: var(--muted); font-weight: 400; }
+.topbar .back { font-size: 16px; text-decoration: none; color: var(--muted); }
+.topbar .back:hover { color: var(--accent); }
+.brand { display: flex; align-items: center; gap: 7px; font-weight: 800;
+         font-size: 15px; letter-spacing: -.01em; white-space: nowrap; }
+.brand svg { display: block; }
+.brand .x { background: linear-gradient(100deg, #4c6ef5, #9775fa);
+            -webkit-background-clip: text; background-clip: text; color: transparent; }
+.dash-title { color: var(--muted); white-space: nowrap;
+              overflow: hidden; text-overflow: ellipsis; max-width: 22ch; }
 .tabs { display: flex; gap: 4px; flex-wrap: wrap; }
 .tab {
   padding: 6px 12px;
@@ -578,3 +585,88 @@ body.has-fullscreen { overflow: hidden; }
   padding: 1px 4px;
   border-radius: 4px;
 }
+
+/* --- search dashboard: funnel ---------------------------------------- */
+.funnel { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; }
+.funnel-row {
+  display: grid;
+  grid-template-columns: 150px 1fr 140px;
+  align-items: center;
+  gap: 12px;
+}
+.funnel-label { font-size: 13px; color: var(--ink-2); text-align: right; }
+.funnel-track { background: var(--page); border-radius: 6px; height: 30px; }
+.funnel-bar { height: 100%; border-radius: 6px; min-width: 3px; }
+.funnel-value { font-size: 13px; color: var(--ink); white-space: nowrap; }
+.funnel-step {
+  font-size: 12px;
+  color: var(--muted);
+  padding-left: 162px;
+}
+
+/* --- search dashboard: treemap ---------------------------------------- */
+.treemap { position: relative; width: 100%; overflow: hidden; }
+.tm-tile {
+  position: absolute;
+  border-radius: 3px;
+  overflow: hidden;
+  opacity: 0.88;
+}
+.tm-tile:hover, .tm-tile:focus { opacity: 1; outline: none; }
+.tm-tile span {
+  display: block;
+  padding: 4px 6px;
+  font-size: 11px;
+  line-height: 1.25;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tm-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; }
+.tm-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink-2); }
+.tm-chip i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+/* --- search dashboard: keywords table ---------------------------------- */
+.kw-controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 8px; }
+.kw-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.kw-chip {
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.kw-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.kw-filter {
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  min-width: 200px;
+}
+.kwtable { border-collapse: collapse; width: 100%; font-size: 13px; }
+.kwtable th, .kwtable td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--grid); }
+.kwtable th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+}
+.kwtable th:hover { color: var(--accent); }
+.kwtable th .arw { font-size: 10px; }
+.kwtable th.num, .kwtable td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.kw-cap { font-size: 12px; color: var(--muted); margin-top: 6px; }

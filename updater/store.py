@@ -38,6 +38,15 @@ CREATE TABLE IF NOT EXISTS category_tree (
   category_l4 TEXT NOT NULL,
   PRIMARY KEY (finance_l1, finance_l2, category_l1, category_l2, category_l3, category_l4)
 );
+CREATE TABLE IF NOT EXISTS search_keywords (
+  platform    TEXT NOT NULL,
+  keyword     TEXT NOT NULL,
+  searches    INTEGER NOT NULL,
+  zsr         INTEGER NOT NULL,
+  low         INTEGER NOT NULL,
+  avg_results REAL,
+  PRIMARY KEY (platform, keyword)
+);
 """
 
 
@@ -107,13 +116,31 @@ def spec_stats(conn, metric_names, dim_names=None):
     return n or 0, latest
 
 
-def prune_old_periods(conn, grain, min_key):
+def prune_old_periods(conn, grain, min_key, exempt_prefix="search_"):
     """Enforce the retention window: drop periods older than min_key at a
-    grain (extraction only bounds what is ADDED; this bounds what is kept)."""
+    grain (extraction only bounds what is ADDED; this bounds what is kept).
+    Metrics under exempt_prefix are owned by updater.search_merge, which
+    enforces its own retention — the registry windows must not touch them."""
     with conn:
         cur = conn.execute(
-            "DELETE FROM metrics WHERE grain = ? AND period < ?", (grain, min_key))
+            "DELETE FROM metrics WHERE grain = ? AND period < ? "
+            "AND metric NOT LIKE ?",
+            (grain, min_key, exempt_prefix + "%"))
     return cur.rowcount
+
+
+def replace_search_keywords(conn, rows, window_start, window_end):
+    """Full replace of the top-keywords table (small, one 28d window)."""
+    with conn:
+        conn.execute("DELETE FROM search_keywords")
+        conn.executemany(
+            "INSERT OR REPLACE INTO search_keywords "
+            "(platform, keyword, searches, zsr, low, avg_results) "
+            "VALUES (?, ?, ?, ?, ?, ?)", rows)
+        conn.execute("INSERT OR REPLACE INTO snapshot_info (key, value) "
+                     "VALUES ('search_kw_start', ?)", (window_start,))
+        conn.execute("INSERT OR REPLACE INTO snapshot_info (key, value) "
+                     "VALUES ('search_kw_end', ?)", (window_end,))
 
 
 def prune_meta(conn, keep_names):

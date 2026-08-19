@@ -1,0 +1,87 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashxona</title>
+<style>
+  body { font: 15px/1.5 -apple-system, system-ui, sans-serif; margin: 2rem auto; max-width: 60rem; padding: 0 1rem; color: #1a1a2e; background: #fff; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.2rem; }
+  .brand { display: flex; align-items: center; gap: .55rem; }
+  .brand svg { display: block; }
+  h1 { font-size: 1.45rem; margin: 0; font-weight: 800; letter-spacing: -.01em; }
+  h1 .x { background: linear-gradient(100deg, #4c6ef5, #9775fa); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .links { display: flex; gap: 1rem; align-items: center; font-size: .9rem; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: .45rem .6rem; border-bottom: 1px solid #e2e2ea; vertical-align: top; }
+  th { font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: #6b6b80; white-space: nowrap; }
+  th[data-s] { cursor: pointer; user-select: none; }
+  th[data-s]:hover { color: #0b57d0; }
+  th .arw { font-size: .7rem; }
+  td.desc { color: #6b6b80; font-size: .9rem; }
+  a { color: #0b57d0; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #16161d; color: #e8e8ef; }
+    th, td { border-color: #33333f; }
+    th, td.desc { color: #9a9ab0; }
+    a { color: #8ab4f8; }
+    th[data-s]:hover { color: #8ab4f8; }
+  }
+</style></head><body>
+<header>
+  <span class="brand">
+    <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true">
+      <defs><linearGradient id="dxg" x1="0" y1="1" x2="1" y2="0">
+        <stop offset="0" stop-color="#4c6ef5"/><stop offset="1" stop-color="#9775fa"/>
+      </linearGradient></defs>
+      <rect x="1" y="1" width="22" height="22" rx="6.5" fill="url(#dxg)"/>
+      <rect x="5.5" y="12.5" width="3.2" height="6.5" rx="1.2" fill="#fff" opacity=".92"/>
+      <rect x="10.4" y="8.5" width="3.2" height="10.5" rx="1.2" fill="#fff" opacity=".92"/>
+      <rect x="15.3" y="5" width="3.2" height="14" rx="1.2" fill="#fff" opacity=".92"/>
+    </svg>
+    <h1>Dash<span class="x">xona</span></h1>
+  </span>
+  <span class="links">
+    <a href="{{ request_url }}" target="_blank" rel="noopener">Request a dashboard ↗</a>
+    <a href="{{ url_for('logout') }}">Log out</a>
+  </span>
+</header>
+<table id="dash"><thead><tr>
+  <th data-s="0">Dashboard <span class="arw"></span></th>
+  <th>Description</th>
+  <th data-s="2">Requested by <span class="arw"></span></th>
+  <th data-s="3">Updated <span class="arw"></span></th>
+</tr></thead>
+<tbody>
+{% for d in dashboards %}
+<tr><td><a href="{{ d.url }}">{{ d.title }}</a></td>
+    <td class="desc">{{ d.description }}</td>
+    <td>{{ d.requested_by or "—" }}</td>
+    <td>{{ d.updated }}</td></tr>
+{% else %}
+<tr><td colspan="4">No dashboards yet</td></tr>
+{% endfor %}
+</tbody></table>
+<script>
+(function () {
+  'use strict';
+  var table = document.getElementById('dash');
+  var heads = table.querySelectorAll('th[data-s]');
+  heads.forEach(function (th) {
+    th.addEventListener('click', function () {
+      var col = +th.dataset.s;
+      var dir = th.dataset.dir === 'asc' ? 'desc' : 'asc';
+      heads.forEach(function (h) { h.dataset.dir = ''; h.querySelector('.arw').textContent = ''; });
+      th.dataset.dir = dir;
+      th.querySelector('.arw').textContent = dir === 'asc' ? '▲' : '▼';
+      var tbody = table.tBodies[0];
+      var rows = Array.prototype.slice.call(tbody.rows);
+      rows.sort(function (a, b) {
+        var x = a.cells[col].textContent.trim().toLowerCase();
+        var y = b.cells[col].textContent.trim().toLowerCase();
+        return (x < y ? -1 : x > y ? 1 : 0) * (dir === 'asc' ? 1 : -1);
+      });
+      rows.forEach(function (r) { tbody.appendChild(r); });
+    });
+  });
+})();
+</script>
+</body></html>

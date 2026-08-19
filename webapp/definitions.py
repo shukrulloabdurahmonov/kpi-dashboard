@@ -381,6 +381,155 @@ for _w, _r in (("7d", "3r"), ("14d", "1r"), ("14d", "3r"), ("28d", "1r"), ("28d"
             METRIC_DEFS[key] = base
 
 
+SEARCH_ROLLUP_SOURCE = ("glue.odyn_search_and_ad_ranking.daily_search_users_kpis "
+                        "+ daily_search_volume_kpis (Trino)")
+SEARCH_AVG_DAILY = ("Weekly/monthly values are AVERAGES OF DAILY values, not "
+                    "period totals or distinct counts over the period.")
+SEARCH_DIMS = "platform, search method"
+
+METRIC_DEFS.update({
+    "search_users": {
+        "label": "Search users (avg daily)",
+        "definition": "Average daily number of users who performed at least one search.",
+        "formula": "SUM(daily users_search) / COUNT(days) per week/month",
+        "source": SEARCH_ROLLUP_SOURCE,
+        "grain": "weekly (full history since 2025) + monthly",
+        "dims": SEARCH_DIMS + ", finance L2 (monthly)",
+        "caveats": SEARCH_AVG_DAILY + " A user active on two platforms counts in both.",
+    },
+    "search_users_adview": {
+        "label": "Searchers reaching an ad view (avg daily)",
+        "definition": "Average daily searchers who also viewed an ad the same day.",
+        "formula": "SUM(daily users_adview) / COUNT(days)",
+        "source": SEARCH_ROLLUP_SOURCE,
+        "grain": "weekly + monthly",
+        "dims": SEARCH_DIMS,
+        "caveats": SEARCH_AVG_DAILY,
+    },
+    "search_users_lead": {
+        "label": "Searchers reaching a reply (avg daily)",
+        "definition": "Average daily searchers who also sent a reply (lead) the same day.",
+        "formula": "SUM(daily users_lead) / COUNT(days)",
+        "source": SEARCH_ROLLUP_SOURCE,
+        "grain": "weekly + monthly",
+        "dims": SEARCH_DIMS,
+        "caveats": SEARCH_AVG_DAILY,
+    },
+    "search_volume": {
+        "label": "Searches (avg daily)",
+        "definition": "Average daily number of searches.",
+        "formula": "SUM(daily volume_search) / COUNT(days)",
+        "source": SEARCH_ROLLUP_SOURCE,
+        "grain": "weekly + monthly",
+        "dims": SEARCH_DIMS,
+        "caveats": SEARCH_AVG_DAILY,
+    },
+    "search_ssu_adview": {
+        "label": "Search → ad view %",
+        "definition": "Share of search users who reached an ad view the same day.",
+        "formula": "AVG(daily users_adview / users_search), unweighted",
+        "source": SEARCH_ROLLUP_SOURCE,
+        "grain": "weekly + monthly",
+        "dims": SEARCH_DIMS + ", finance L2 (monthly)",
+        "caveats": "Per-category values use ALL search users as denominator — "
+                   "they are shares of all search users, NOT that category's "
+                   "conversion rate.",
+    },
+    "search_ssu_lead": {
+        "label": "Search → reply %",
+        "definition": "Share of search users who sent a reply (lead) the same day.",
+        "formula": "AVG(daily users_lead / users_search), unweighted",
+        "source": SEARCH_ROLLUP_SOURCE,
+        "grain": "weekly + monthly",
+        "dims": SEARCH_DIMS + ", finance L2 (monthly)",
+        "caveats": "Same denominator caveat as search → ad view %.",
+    },
+    "search_avg_adview_su": {
+        "label": "Ad views per search user",
+        "definition": "Average ad views per search user per day.",
+        "formula": "AVG(daily volume_adview / users_search)",
+        "source": SEARCH_ROLLUP_SOURCE,
+        "grain": "weekly",
+        "dims": SEARCH_DIMS,
+        "caveats": "",
+    },
+    "search_avg_lead_su": {
+        "label": "Replies per search user",
+        "definition": "Average replies (leads) per search user per day.",
+        "formula": "AVG(daily volume_lead / users_search)",
+        "source": SEARCH_ROLLUP_SOURCE,
+        "grain": "weekly",
+        "dims": SEARCH_DIMS,
+        "caveats": "",
+    },
+    "search_share_on_platform": {
+        "label": "Method share of platform searchers",
+        "definition": "Share of the platform's search users using this search method "
+                      "(keyword vs browsing vs all).",
+        "formula": "AVG(daily users_search[method] / users_search[method=All])",
+        "source": SEARCH_ROLLUP_SOURCE,
+        "grain": "weekly",
+        "dims": SEARCH_DIMS,
+        "caveats": "Users can use both methods in a day, so method shares can sum past 100%.",
+    },
+    "search_searches": {
+        "label": "Searches (event count)",
+        "definition": "Total search events — the only true (additive) search volume "
+                      "metric; everything else on the Search page is avg-daily.",
+        "formula": "SUM(searches) from the daily user-search log",
+        "source": "glue.odyn_search_and_ad_ranking.daily_user_searches (Trino)",
+        "grain": "daily (90d) + monthly",
+        "dims": "platform, search method, category usage, finance L1/L2 (monthly)",
+        "caveats": "Keyword = typed query; Browsing = category navigation without a query.",
+    },
+    "search_serp": {
+        "label": "Keyword SERP views",
+        "definition": "First-page keyword search result pages viewed, from raw hydra "
+                      "clickstream, bot-filtered.",
+        "formula": "COUNT(*) first-page keyword SERPs, bot/UA/IP filtered, "
+                   "result_count sentinel (>=999999) excluded",
+        "source": "hydra.web / hydra.android / hydra.ios (yamato)",
+        "grain": "monthly + daily (90d)",
+        "dims": "platform (Web/Android/iOS), region",
+        "caveats": "UZ hydra retention starts 2025-07-02. Different 'search' definition "
+                   "than the Trino rollups — do not compare volumes across the two.",
+    },
+    "search_zsr": {
+        "label": "Zero-result SERP views",
+        "definition": "Keyword SERP views that returned 0 results.",
+        "formula": "SUM(result_count = 0) over first-page keyword SERPs",
+        "source": "hydra.web / hydra.android / hydra.ios (yamato)",
+        "grain": "monthly + daily (90d)",
+        "dims": "platform, region",
+        "caveats": "Web and iOS auto-extend empty searches with fallback results "
+                   "(hard-zero rate ~0.001%); Android reports true zeros (~15%). "
+                   "NEVER blend platforms into one rate.",
+    },
+    "search_zsr_low": {
+        "label": "Low-supply SERP views (1–10 results)",
+        "definition": "Keyword SERP views that returned between 1 and 10 results — "
+                      "the actionable low-supply signal on web/iOS.",
+        "formula": "SUM(result_count BETWEEN 1 AND 10) over first-page keyword SERPs",
+        "source": "hydra.web / hydra.android / hydra.ios (yamato)",
+        "grain": "monthly + daily (90d)",
+        "dims": "platform, region",
+        "caveats": "Same platform caveat as zero-result views.",
+    },
+    "search_keywords_table": {
+        "label": "Top search keywords",
+        "definition": "Most-searched keywords over the last 28 days with their "
+                      "zero-result and low-supply rates and average result count.",
+        "formula": "Top %d per platform by searches (min %d searches), "
+                   "LOWER(BTRIM(keyword)) normalized" % (500, 30),
+        "source": "hydra.web / hydra.android / hydra.ios (yamato)",
+        "grain": "28-day window, refreshed with each search extraction",
+        "dims": "platform",
+        "caveats": "ZSR %% is only meaningful on Android (web/iOS auto-extend "
+                   "empty searches).",
+    },
+})
+
+
 def info(metric):
     """Short info text for the ⓘ popover."""
     d = METRIC_DEFS.get(metric)

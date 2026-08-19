@@ -110,6 +110,49 @@ writes are atomic (DELETE range + INSERT in one transaction) so interrupted
 runs resume safely; cohort metrics (liquidity, first-time listers) only
 extract matured cohorts.
 
+## Search dashboard extraction (Mac only)
+
+The `/search` dashboard's metrics come from two sources the box can't reach,
+so they bypass the MetricSpec registry (see `updater/search_common.py`):
+
+* **Trino** (`presto.data.olx.org`, LDAP password in the macOS Keychain,
+  service `presto-ldap`) — the glue search-KPI rollups adapted from
+  `Scripts/uz_search_kpis/` into `sql/search/*.sql`. Weekly/monthly values
+  are AVERAGES OF DAILY values; `search_searches` is the only true total.
+* **hydra clickstream on yamato** (VPN) — region-split SERP/ZSR counts and
+  the 28-day top-keywords table (patterns from `Scripts/zsr_dashboard/`).
+
+```bash
+/usr/bin/python3 -m updater.search_extract --backfill --local-only  # first fill
+/usr/bin/python3 -m updater.search_extract                          # daily rolling
+/usr/bin/python3 -m updater.search_extract --local-only --republish # local only
+```
+
+The extractor writes `updater/store/search_payload.sqlite`, merges it into
+the local store, then (unless `--local-only`) scp's it to the box where
+`python3 -m updater.search_merge <payload> --republish` merges + republishes.
+Search rows carry the `search_` metric prefix: the registry's retention
+pruning exempts them, and `search_merge` enforces its own 90-day retention on
+the daily grain. All `*_tgv` source columns are dropped (always 0 for UZ).
+Exit codes: 0 ok · 1 fatal · 2 partial (one source failed).
+
+## Warehouse tunnel for the box's nightly refresh (Mac)
+
+The box's `nightly_update.sh` reads the warehouse through a reverse-SSH
+tunnel on ITS `localhost:15432`; this Mac provides it on a daily window:
+
+```bash
+cp deploy/com.shukrullo.kpi-tunnel.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.shukrullo.kpi-tunnel.plist
+```
+
+`deploy/warehouse_tunnel.sh` opens at 06:30 local, self-terminates at 09:30
+(bracketing the box's 07:00 refresh + 3×30-min retries), reads the warehouse
+host/port from `~/Automations/credentials/s_abdurahmonov.json` and the box
+address from `config/deploy.env`. A dropped tunnel restarts within the
+window (launchd KeepAlive on failure). Logs: `~/Library/Logs/kpi-tunnel.log`.
+Requires the Mac awake and on VPN during the window.
+
 ## Local webapp dev
 
 ```bash

@@ -239,7 +239,7 @@
   function initLoading() {
     var form = document.getElementById("filter-form");
     if (form) form.addEventListener("submit", function () { showLoading(); });
-    document.querySelectorAll(".grain-toggle a, nav.tabs a, .filters-clear")
+    document.querySelectorAll(".grain-toggle a, nav.tabs a, .topbar .back, .filters-clear")
       .forEach(function (a) {
         a.addEventListener("click", function (ev) {
           // let open-in-new-tab clicks through without an overlay
@@ -845,6 +845,297 @@
 
   /* ---- render ------------------------------------------------------------ */
 
+  /* ---- search funnel (DOM kind) ------------------------------------------ */
+
+  function buildFunnel(fig, spec) {
+    // horizontal stage bars scaled to the first stage, with step conversion
+    // printed between stages. spec.stages = [[label, value, shareOfFirst]].
+    var holder = fig.querySelector(".chart-holder");
+    var canvas = holder.querySelector("canvas");
+    if (canvas) canvas.remove();
+    var pal = palette();
+    var wrap = document.createElement("div");
+    wrap.className = "funnel";
+    spec.stages.forEach(function (st, i) {
+      if (i > 0) {
+        var prev = spec.stages[i - 1][1];
+        var step = document.createElement("div");
+        step.className = "funnel-step";
+        step.textContent = "↓ " + (prev ? (st[1] / prev * 100).toFixed(1) : "–") + "%";
+        wrap.appendChild(step);
+      }
+      var row = document.createElement("div");
+      row.className = "funnel-row";
+      var lab = document.createElement("div");
+      lab.className = "funnel-label";
+      lab.textContent = st[0];
+      row.appendChild(lab);
+      var track = document.createElement("div");
+      track.className = "funnel-track";
+      var bar = document.createElement("div");
+      bar.className = "funnel-bar";
+      bar.style.width = Math.max(1.5, st[2] * 100) + "%";
+      bar.style.background = pal.series[i % pal.series.length];
+      track.appendChild(bar);
+      row.appendChild(track);
+      var val = document.createElement("div");
+      val.className = "funnel-value";
+      val.textContent = fmtCompact(st[1]) + " (" + (st[2] * 100).toFixed(1) + "%)";
+      row.appendChild(val);
+      attachTip(row, st[0] + ": " + fmtFull(st[1]) + " — "
+                + (st[2] * 100).toFixed(2) + "% of search users");
+      wrap.appendChild(row);
+    });
+    holder.style.height = "auto";
+    holder.appendChild(wrap);
+  }
+
+  /* ---- squarified treemap (DOM kind) -------------------------------------- */
+
+  function squarify(items, x, y, w, h, out) {
+    // items sorted descending, each {v, ...}; classic squarify layout.
+    if (!items.length) return;
+    var total = items.reduce(function (s, it) { return s + it.v; }, 0);
+    if (total <= 0) return;
+    var scale = (w * h) / total;
+    var row = [], rest = items.slice();
+
+    function worst(row, side) {
+      var sum = row.reduce(function (s, it) { return s + it.v * scale; }, 0);
+      var mx = 0;
+      row.forEach(function (it) {
+        var a = it.v * scale;
+        var r = Math.max((side * side * a) / (sum * sum), (sum * sum) / (side * side * a));
+        if (r > mx) mx = r;
+      });
+      return mx;
+    }
+
+    while (rest.length) {
+      var side = Math.min(w, h);
+      row.push(rest[0]);
+      if (row.length > 1 && worst(row, side) > worst(row.slice(0, -1), side)) {
+        row.pop();
+        var sum = row.reduce(function (s, it) { return s + it.v * scale; }, 0);
+        if (w >= h) {  // lay the row as a vertical strip on the left
+          var sw = sum / h;
+          var yy = y;
+          row.forEach(function (it) {
+            var ih = it.v * scale / sw;
+            out.push({ it: it, x: x, y: yy, w: sw, h: ih });
+            yy += ih;
+          });
+          x += sw; w -= sw;
+        } else {       // horizontal strip on top
+          var sh = sum / w;
+          var xx = x;
+          row.forEach(function (it) {
+            var iw = it.v * scale / sh;
+            out.push({ it: it, x: xx, y: y, w: iw, h: sh });
+            xx += iw;
+          });
+          y += sh; h -= sh;
+        }
+        row = [];
+      } else {
+        rest.shift();
+      }
+    }
+    if (row.length) {
+      var sum2 = row.reduce(function (s, it) { return s + it.v * scale; }, 0);
+      if (w >= h) {
+        var sw2 = sum2 / h, yy2 = y;
+        row.forEach(function (it) {
+          var ih = it.v * scale / sw2;
+          out.push({ it: it, x: x, y: yy2, w: sw2, h: ih });
+          yy2 += ih;
+        });
+      } else {
+        var sh2 = sum2 / w, xx2 = x;
+        row.forEach(function (it) {
+          var iw = it.v * scale / sh2;
+          out.push({ it: it, x: xx2, y: y, w: iw, h: sh2 });
+          xx2 += iw;
+        });
+      }
+    }
+  }
+
+  function buildTreemap(fig, spec) {
+    // spec.rows = [[groupL1, labelL2, value]]; tile color = L1 group.
+    var holder = fig.querySelector(".chart-holder");
+    var canvas = holder.querySelector("canvas");
+    if (canvas) canvas.remove();
+    var pal = palette();
+    var box = document.createElement("div");
+    box.className = "treemap";
+    holder.style.height = "auto";
+    holder.appendChild(box);
+    var W = box.clientWidth || holder.clientWidth || 800;
+    var H = 380;
+    box.style.height = H + "px";
+    var total = 0;
+    var groups = [];
+    spec.rows.forEach(function (r) {
+      if (groups.indexOf(r[0]) < 0) groups.push(r[0]);
+      total += r[2];
+    });
+    var items = spec.rows.map(function (r) {
+      return { g: r[0], label: r[1], v: r[2] };
+    }).filter(function (it) { return it.v > 0; })
+      .sort(function (a, b) { return b.v - a.v; });
+    var tiles = [];
+    squarify(items, 0, 0, W, H, tiles);
+    tiles.forEach(function (t) {
+      var d = document.createElement("div");
+      d.className = "tm-tile";
+      d.style.left = t.x.toFixed(1) + "px";
+      d.style.top = t.y.toFixed(1) + "px";
+      d.style.width = Math.max(0, t.w - 2).toFixed(1) + "px";
+      d.style.height = Math.max(0, t.h - 2).toFixed(1) + "px";
+      d.style.background = pal.series[groups.indexOf(t.it.g) % pal.series.length];
+      if (t.w > 60 && t.h > 26) {
+        var s = document.createElement("span");
+        s.textContent = t.it.label;
+        d.appendChild(s);
+      }
+      attachTip(d, t.it.g + " › " + t.it.label + ": " + fmtFull(t.it.v)
+                + " (" + (t.it.v / total * 100).toFixed(1) + "%)");
+      d.tabIndex = 0;
+      box.appendChild(d);
+    });
+    // legend: one chip per L1 group
+    var legend = document.createElement("div");
+    legend.className = "tm-legend";
+    groups.forEach(function (gname, i) {
+      var chip = document.createElement("span");
+      chip.className = "tm-chip";
+      var sw = document.createElement("i");
+      sw.style.background = pal.series[i % pal.series.length];
+      chip.appendChild(sw);
+      chip.appendChild(document.createTextNode(gname));
+      legend.appendChild(chip);
+    });
+    holder.appendChild(legend);
+  }
+
+  /* ---- sortable keywords table (DOM kind) ---------------------------------- */
+
+  var KW_ROW_CAP = 400;
+
+  function buildKwTable(fig, spec) {
+    var holder = fig.querySelector(".chart-holder");
+    var canvas = holder.querySelector("canvas");
+    if (canvas) canvas.remove();
+    holder.style.height = "auto";
+
+    var state = { platform: "all", text: "", sortKey: "searches", dir: -1 };
+    var platIdx = spec.columns.findIndex(function (c) { return c.key === "platform"; });
+    var kwIdx = spec.columns.findIndex(function (c) { return c.key === "keyword"; });
+
+    var controls = document.createElement("div");
+    controls.className = "kw-controls";
+    var chips = document.createElement("div");
+    chips.className = "kw-chips";
+    ["all"].concat(spec.platforms).forEach(function (p) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "kw-chip" + (p === "all" ? " active" : "");
+      b.textContent = p === "all" ? "All platforms" : p;
+      b.addEventListener("click", function () {
+        state.platform = p;
+        chips.querySelectorAll(".kw-chip").forEach(function (c) {
+          c.classList.remove("active");
+        });
+        b.classList.add("active");
+        renderBody();
+      });
+      chips.appendChild(b);
+    });
+    controls.appendChild(chips);
+    var input = document.createElement("input");
+    input.type = "search";
+    input.placeholder = "Filter keywords…";
+    input.className = "kw-filter";
+    input.addEventListener("input", function () {
+      state.text = input.value.trim().toLowerCase();
+      renderBody();
+    });
+    controls.appendChild(input);
+    holder.appendChild(controls);
+
+    var table = document.createElement("table");
+    table.className = "kwtable";
+    var thead = document.createElement("thead");
+    var hr = document.createElement("tr");
+    spec.columns.forEach(function (col, i) {
+      var th = document.createElement("th");
+      th.textContent = col.label + " ";
+      var arw = document.createElement("span");
+      arw.className = "arw";
+      th.appendChild(arw);
+      if (col.num) th.classList.add("num");
+      th.addEventListener("click", function () {
+        if (state.sortKey === col.key) state.dir = -state.dir;
+        else { state.sortKey = col.key; state.dir = col.num ? -1 : 1; }
+        renderBody();
+      });
+      hr.appendChild(th);
+    });
+    thead.appendChild(hr);
+    table.appendChild(thead);
+    var tbody = document.createElement("tbody");
+    table.appendChild(tbody);
+    holder.appendChild(table);
+    var capNote = document.createElement("div");
+    capNote.className = "kw-cap";
+    holder.appendChild(capNote);
+
+    function renderBody() {
+      var si = spec.columns.findIndex(function (c) { return c.key === state.sortKey; });
+      var rows = spec.rows.filter(function (r) {
+        if (state.platform !== "all" && r[platIdx] !== state.platform) return false;
+        if (state.text && String(r[kwIdx]).toLowerCase().indexOf(state.text) < 0) return false;
+        return true;
+      });
+      var isNum = !!spec.columns[si].num;
+      rows.sort(function (a, b) {
+        var x = a[si], y = b[si];
+        if (x === null || x === undefined) return 1;
+        if (y === null || y === undefined) return -1;
+        if (isNum) return (x - y) * state.dir;
+        return String(x).localeCompare(String(y)) * state.dir;
+      });
+      thead.querySelectorAll("th").forEach(function (th, i) {
+        th.querySelector(".arw").textContent =
+          i === si ? (state.dir > 0 ? "▲" : "▼") : "";
+      });
+      tbody.textContent = "";
+      var shown = rows.slice(0, KW_ROW_CAP);
+      shown.forEach(function (r) {
+        var tr = document.createElement("tr");
+        spec.columns.forEach(function (col, i) {
+          var td = document.createElement("td");
+          if (col.num) {
+            td.classList.add("num");
+            td.textContent = col.pct ? fmtCompact(r[i], true)
+              : (r[i] === null || r[i] === undefined ? "–"
+                 : (+r[i]).toLocaleString());
+          } else {
+            td.textContent = r[i] === null || r[i] === undefined ? "–" : r[i];
+          }
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+      capNote.textContent = rows.length > KW_ROW_CAP
+        ? "Showing top " + KW_ROW_CAP + " of " + rows.length.toLocaleString()
+          + " keywords — narrow with the filter."
+        : rows.length.toLocaleString() + " keywords.";
+    }
+    renderBody();
+  }
+
   function renderCharts() {
     document.querySelectorAll(".chart-card[data-chart]").forEach(function (fig) {
       var spec;
@@ -861,6 +1152,18 @@
       }
       if (spec.kind === "map") {
         if (canvas) buildMap(fig, spec);
+        return;
+      }
+      if (spec.kind === "funnel") {
+        if (canvas) buildFunnel(fig, spec);
+        return;
+      }
+      if (spec.kind === "treemap") {
+        if (canvas) buildTreemap(fig, spec);
+        return;
+      }
+      if (spec.kind === "kwtable") {
+        if (canvas) buildKwTable(fig, spec);
         return;
       }
       if (!canvas) return;

@@ -394,6 +394,37 @@ ORDER BY 1;
 
 ---
 
+## 7. Search (Search dashboard)
+
+Extracted by `updater/search_extract.py` on the Mac (the box can't reach these
+sources); metric names carry the `search_` prefix. Two sources with DIFFERENT
+definitions of "a search" — never compare volumes across them:
+
+**Trino rollups** (`glue.odyn_search_and_ad_ranking.daily_search_users_kpis` +
+`daily_search_volume_kpis` + `daily_user_searches`, from 2025-01-01, weekly
+from 2024-12-30):
+
+| Metric | Meaning |
+|---|---|
+| `search_users` / `search_users_adview` / `search_users_lead` | **Avg daily** users searching / also viewing an ad / also replying same-day |
+| `search_volume` (+`_adview`, `_lead`) | **Avg daily** searches / ad views / replies by searchers |
+| `search_ssu_adview`, `search_ssu_lead` | % of search users reaching an ad view / reply (unweighted avg of daily ratios). Per-category values use ALL search users as denominator |
+| `search_avg_adview_su`, `search_avg_lead_su` | Ad views / replies per search user per day |
+| `search_share_on_platform` | Method's share of the platform's search users |
+| `search_searches` | **True event totals** (daily 90d + monthly, by platform/method/category-usage/finance L1–L2) |
+
+All `*_tgv` source columns dropped — TGV is not tracked for UZ (always 0).
+
+**hydra clickstream** (yamato, from 2025-07-02, bot-filtered, first-page
+keyword SERPs only, `result_count >= 999999` sentinel excluded):
+
+| Metric | Meaning |
+|---|---|
+| `search_serp` | Keyword SERP views (monthly by region/platform + daily 90d) |
+| `search_zsr` | SERP views with 0 results. **Android reports true zeros (~15%); web/iOS auto-extend empty searches (~0.001%) — rates are never blended across platforms** |
+| `search_zsr_low` | SERP views with 1–10 results (low supply) |
+| `search_keywords` table | Top 500/platform keywords by 28-day volume with zsr/low/avg_results |
+
 ## Change log & known discrepancies
 
 | Date | Change |

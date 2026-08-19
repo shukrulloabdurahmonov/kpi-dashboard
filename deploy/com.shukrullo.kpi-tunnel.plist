@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Reverse-SSH warehouse tunnel for the box's nightly refresh.
+
+     Install (once):
+       cp deploy/com.shukrullo.kpi-tunnel.plist ~/Library/LaunchAgents/
+       launchctl load ~/Library/LaunchAgents/com.shukrullo.kpi-tunnel.plist
+     Test now:
+       launchctl kickstart gui/$(id -u)/com.shukrullo.kpi-tunnel
+     Logs: ~/Library/Logs/kpi-tunnel.log
+
+     Fires daily at 06:30 local (Tashkent); the wrapper self-terminates at
+     09:30, bracketing the box's 07:00 refresh + its 3x30-min retries.
+     KeepAlive/SuccessfulExit=false restarts the wrapper only when the
+     tunnel drops mid-window (exit 1); the window-over exit 0 ends the day. -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.shukrullo.kpi-tunnel</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/s.abdurahmonov/Automations/Scripts/olx_uz_kpi_dashboard/deploy/warehouse_tunnel.sh</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>6</integer>
+    <key>Minute</key>
+    <integer>30</integer>
+  </dict>
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>/Users/s.abdurahmonov/Library/Logs/kpi-tunnel.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/s.abdurahmonov/Library/Logs/kpi-tunnel.log</string>
+</dict>
+</plist>

@@ -28,8 +28,8 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from webapp import data
 from webapp.definitions import METRIC_DEFS, info
 
-TABS = [
-    ("overview", "/", "Overview"),
+KPI_TABS = [
+    ("overview", "/overview", "Overview"),
     ("listings", "/listings", "Listings"),
     ("engagement", "/engagement", "Engagement"),
     ("liquidity", "/liquidity", "Liquidity"),
@@ -38,6 +38,37 @@ TABS = [
     ("player", "/player", "Timeline Player"),
     ("dictionary", "/dictionary", "Dictionary"),
 ]
+TABS = KPI_TABS  # legacy alias; hand routes below still reference it
+
+SEARCH_TABS = [
+    ("search", "/search", "Search"),
+]
+
+JIRA_REQUEST_URL = (
+    "https://tteam.atlassian.net/jira/software/projects/AN/list"
+    "?jql=project%20%3D%20AN%20ORDER%20BY%20cf%5B10019%5D%20ASC"
+)
+
+# Landing-page registry (Dashxona convention, hardcoded — no folder scan).
+KPI_DASH_TITLE = "OLX UZ KPI dashboard"
+SEARCH_DASH_TITLE = "OLX UZ Search"
+DASHBOARDS = [
+    {"slug": "kpi", "title": KPI_DASH_TITLE,
+     "description": "Marketplace health metrics: listings, engagement, "
+                    "liquidity, monetization, users.",
+     "requested_by": "T-Team", "url": "/overview", "tabs": KPI_TABS},
+    {"slug": "search", "title": SEARCH_DASH_TITLE,
+     "description": "Search KPIs: search funnel, volume and method mix, "
+                    "category and region splits, top keywords with "
+                    "zero-result rates.",
+     "requested_by": "T-Team", "url": "/search", "tabs": SEARCH_TABS},
+]
+DASH_TITLE_BY_TAB = {
+    tab_id: d["title"] for d in DASHBOARDS for tab_id, _, _ in d["tabs"]
+}
+TABS_BY_TAB = {
+    tab_id: d["tabs"] for d in DASHBOARDS for tab_id, _, _ in d["tabs"]
+}
 
 # Timeline Player metric roster: key → (label, {grain: stored metric}).
 # Metrics without a daily entry get the day toggle disabled.
@@ -562,6 +593,243 @@ def build_users():
     return {"cards": cards, "charts": charts}
 
 
+# --------------------------------------------------------------------------
+# Search dashboard — page-local helpers that never call track(), so the page
+# renders with NO filter panel / grain toggle: every section pins its own
+# grain (the only one its source exists at) and says so in a note.
+# --------------------------------------------------------------------------
+
+AVG_DAILY_NOTE = "Average daily values (weekly points = average of that week's days)."
+ZSR_PLATFORM_NOTE = ("Android reports true zero-result rates (~15%); web and iOS "
+                     "auto-extend empty searches, so their hard-zero rates are "
+                     "near 0. Rates are never blended across platforms.")
+
+
+def _s_line(title, series_list, grain, unit=None, note=None, pct=False,
+            area=False, info_key=None):
+    series = [s for s in series_list if s["points"]]
+    if not series:
+        return None
+    return {"kind": "line", "title": title, "unit": unit, "grain": grain,
+            "series": series, "note": note, "pct": pct, "area": area,
+            "info": info(info_key) if info_key else None}
+
+
+def _s_card(label, points, grain, fmt=None, unit=None, badge=None, info_key=None):
+    return {"label": label, "kpi": data.kpi_from_points(points, grain),
+            "fmt": fmt, "unit": unit, "badge": badge,
+            "info": info(info_key) if info_key else None}
+
+
+def _slice_ratio(num_metric, den_metric, grain, dim_name, dim_value, as_pct=True):
+    """Per-period ratio of two metrics at the SAME dim slice."""
+    num = dict(data.series_at(num_metric, grain, dim_name, dim_value))
+    den = dict(data.series_at(den_metric, grain, dim_name, dim_value))
+    out = []
+    for p in sorted(set(num) & set(den)):
+        if den[p]:
+            v = num[p] / den[p]
+            out.append([p, round(v * 100.0, 2) if as_pct else round(v, 4)])
+    return out
+
+
+def _search_funnel():
+    """Latest full week's funnel: search users → ad viewers → repliers."""
+    users = data.series_at("search_users", "weekly")
+    adview = dict(data.series_at("search_users_adview", "weekly"))
+    lead = dict(data.series_at("search_users_lead", "weekly"))
+    for period, u in reversed(users):
+        if period in adview and period in lead and u:
+            stages = [
+                ["Search users", u, 1.0],
+                ["Reached an ad view", adview[period], adview[period] / u],
+                ["Sent a reply", lead[period], lead[period] / u],
+            ]
+            trino_meta = data.meta().get("search_trino") or {}
+            extracted = (trino_meta.get("extracted_at_utc") or "")[:10]
+            note = (AVG_DAILY_NOTE + " All platforms and methods."
+                    + (" Search data extracted %s." % extracted if extracted else ""))
+            return {"kind": "funnel", "title": "Search funnel — week of " + period,
+                    "stages": stages, "note": note, "info": info("search_users")}
+    return None
+
+
+def _search_treemap():
+    period, rows = data.breakdown("search_searches", "search_cat_l1|search_cat",
+                                  top_n=60)
+    if not rows:
+        return None
+    tiles = []
+    for name, v in rows:
+        if data.PAIR_SEP not in name:
+            continue
+        l1, l2 = name.split(data.PAIR_SEP, 1)
+        if l2 == "No category":
+            l2 = l1 + " (uncategorized)"
+        tiles.append([l1, l2, v])
+    if not tiles:
+        return None
+    return {"kind": "treemap", "title": "Searches by category — " + period,
+            "rows": tiles,
+            "note": "True search event totals, latest full month. Tile = finance "
+                    "L2, color = finance L1 group.",
+            "info": info("search_searches")}
+
+
+def _search_cat_matrix(months=13, top_n=12):
+    values = data.dim_values("search_searches", "search_cat", top_n=top_n)
+    values = [v for v in values if v != "No category"]
+    if not values:
+        return None
+    periods, rows = None, []
+    for v in values:
+        pts = data.monthly("search_searches", "search_cat", v)[-months:]
+        by_p = dict(pts)
+        if periods is None:
+            periods = [p for p, _ in pts]
+        rows.append([v, [by_p.get(p) for p in (periods or [])]])
+    if not periods:
+        return None
+    return {"kind": "matrix", "title": "Searches by category × month",
+            "periods": periods, "rows": rows,
+            "note": "True search event totals per finance L2. Fixed monthly view.",
+            "info": info("search_searches")}
+
+
+def _search_region_map():
+    period, rows = data.breakdown("search_serp", "region", top_n=20)
+    if not rows:
+        return None
+    return {"kind": "map", "title": "Keyword SERP views by region — " + period,
+            "rows": rows,
+            "note": "First-page keyword searches from clickstream, all platforms "
+                    "(additive event counts). Fixed monthly view.",
+            "info": info("search_serp")}
+
+
+def _search_zsr_region_bars():
+    period = data.latest_full_period("search_zsr", "monthly", "platform|region")
+    if period is None:
+        return None
+    _, zsr_rows = data.breakdown("search_zsr", "platform|region",
+                                 period=period, top_n=100)
+    _, serp_rows = data.breakdown("search_serp", "platform|region",
+                                  period=period, top_n=100)
+    serp = dict(serp_rows)
+    rows = []
+    for name, z in zsr_rows:
+        if not name.startswith("Android" + data.PAIR_SEP):
+            continue
+        s = serp.get(name)
+        if s:
+            rows.append([name.split(data.PAIR_SEP, 1)[1], round(z / s * 100.0, 1)])
+    if not rows:
+        return None
+    rows.sort(key=lambda r: -r[1])
+    return {"kind": "barh", "title": "Zero-result rate by region (Android) — " + period,
+            "unit": "%", "rows": rows,
+            "note": ZSR_PLATFORM_NOTE, "info": info("search_zsr")}
+
+
+def _search_kwtable():
+    payload = data.search_keywords()
+    if not payload["rows"]:
+        return None
+    rows = []
+    for platform, kw, searches, zsr, low, avg_results in payload["rows"]:
+        rows.append([kw, platform, searches,
+                     round(zsr / searches * 100.0, 1) if searches else None,
+                     round(low / searches * 100.0, 1) if searches else None,
+                     avg_results])
+    d1, d2 = payload["window"]
+    window = (" (%s → %s)" % (d1, d2)) if d1 and d2 else ""
+    return {
+        "kind": "kwtable", "title": "Top search keywords — 28 days" + window,
+        "columns": [
+            {"key": "keyword", "label": "Keyword"},
+            {"key": "platform", "label": "Platform"},
+            {"key": "searches", "label": "Searches", "num": True},
+            {"key": "zsr_pct", "label": "ZSR %", "num": True, "pct": True},
+            {"key": "low_pct", "label": "Low-supply %", "num": True, "pct": True},
+            {"key": "avg_results", "label": "Avg results", "num": True},
+        ],
+        "rows": rows, "platforms": ["Web", "Android", "iOS"],
+        "note": "First-page keyword SERPs, bot-filtered. " + ZSR_PLATFORM_NOTE,
+        "info": info("search_keywords_table"),
+    }
+
+
+def build_search():
+    wk = "weekly"
+    android_zsr = _slice_ratio("search_zsr", "search_serp", "monthly",
+                               "platform", "Android")
+    cards = [
+        _s_card("Search users / day", data.series_at("search_users", wk), wk,
+                info_key="search_users"),
+        _s_card("Searches per search user",
+                data.ratio_at("search_volume", "search_users", wk, as_pct=False),
+                wk, info_key="search_volume"),
+        _s_card("Search → ad view", data.series_at("search_ssu_adview", wk), wk,
+                fmt="pct", info_key="search_ssu_adview"),
+        _s_card("Search → reply", data.series_at("search_ssu_lead", wk), wk,
+                fmt="pct", info_key="search_ssu_lead"),
+        _s_card("Zero-result rate", android_zsr, "monthly", fmt="pct",
+                badge="Android only", info_key="search_zsr"),
+        _s_card("Searches / day (events)", data.daily("search_searches"), "daily",
+                info_key="search_searches"),
+    ]
+
+    def wk_series(metric, dim_name, dim_value, label=None):
+        return {"label": label or dim_value,
+                "points": data.series_at(metric, wk, dim_name, dim_value)}
+
+    platforms = data.dim_values("search_users", "platform", top_n=4)
+    methods = ["Keyword", "Browsing"]
+    charts = [
+        _search_funnel(),
+        _s_line("Funnel conversion trend",
+                [wk_series("search_ssu_adview", "total", data.TOTAL,
+                           "Search → ad view"),
+                 wk_series("search_ssu_lead", "total", data.TOTAL,
+                           "Search → reply")],
+                wk, pct=True, info_key="search_ssu_adview",
+                note="Unweighted average of daily ratios, weekly."),
+        _s_line("Search users by platform",
+                [wk_series("search_users", "platform", p) for p in platforms],
+                wk, note=AVG_DAILY_NOTE, info_key="search_users"),
+        _s_line("Search volume",
+                [wk_series("search_volume", "total", data.TOTAL, "Searches")],
+                wk, area=True, note=AVG_DAILY_NOTE, info_key="search_volume"),
+        {"kind": "stacked", "title": "Search volume by method", "unit": None,
+         "grain": wk, "note": "Avg daily searches; methods are additive "
+                              "(each search has exactly one method).",
+         "series": [wk_series("search_volume", "method", m) for m in methods
+                    if data.series_at("search_volume", wk, "method", m)],
+         "info": info("search_volume")},
+        _s_line("Method share of platform searchers",
+                [wk_series("search_share_on_platform", "method", m)
+                 for m in methods],
+                wk, pct=True, info_key="search_share_on_platform",
+                note="Users can use both methods in a day, so shares can sum "
+                     "past 100%."),
+        _s_line("Keyword vs browsing searches (90d)",
+                [{"label": m, "points": data.daily("search_searches", "method", m)}
+                 for m in methods],
+                "daily", note="True daily event totals.",
+                info_key="search_searches"),
+        _search_treemap(),
+        _search_cat_matrix(),
+        _search_region_map(),
+        _search_zsr_region_bars(),
+        _s_line("Zero-result rate trend (Android)",
+                [{"label": "Android ZSR", "points": _slice_ratio(
+                    "search_zsr", "search_serp", "daily", "platform", "Android")}],
+                "daily", pct=True, note=ZSR_PLATFORM_NOTE, info_key="search_zsr"),
+        _search_kwtable(),
+    ]
+    return {"cards": cards, "charts": charts}
+
+
 BUILDERS = {
     "overview": build_overview,
     "listings": build_listings,
@@ -569,6 +837,7 @@ BUILDERS = {
     "liquidity": build_liquidity,
     "monetization": build_monetization,
     "users": build_users,
+    "search": build_search,
 }
 
 
@@ -736,10 +1005,25 @@ def create_app():
         return jsonify({"status": "ok", "built_at_utc": built,
                         "age_hours": age_h, "freshness": level})
 
+    @app.route("/")
+    def landing():
+        entries = []
+        for d in DASHBOARDS:
+            e = {k: d[k] for k in ("slug", "title", "description",
+                                   "requested_by", "url")}
+            e["updated"] = ""
+            if data.available():
+                built, _, _ = data.freshness()
+                e["updated"] = (built or "")[:10]
+            entries.append(e)
+        return render_template("landing.html", dashboards=entries,
+                               request_url=JIRA_REQUEST_URL)
+
     @app.route("/player")
     def player():
         if not data.available():
-            return render_template("nodata.html", tabs=TABS, active="player"), 503
+            return render_template("nodata.html", tabs=TABS, active="player",
+                                   dash_title=KPI_DASH_TITLE), 503
         built, age_h, level = data.freshness()
         metric_options = [
             {"key": k, "label": lbl, "grains": sorted(grains)}
@@ -749,6 +1033,7 @@ def create_app():
             "player.html", tabs=TABS, active="player",
             built_at=built, age_hours=age_h, freshness=level,
             metric_options=metric_options, player_dims=PLAYER_DIMS,
+            dash_title=KPI_DASH_TITLE,
         )
 
     @app.route("/player/data")
@@ -775,11 +1060,14 @@ def create_app():
         return render_template(
             "dictionary.html", tabs=TABS, active="dictionary", entries=entries,
             built_at=built, age_hours=age_h, freshness=level,
+            dash_title=KPI_DASH_TITLE,
         )
 
     def render_tab(tab_id):
         if not data.available():
-            return render_template("nodata.html", tabs=TABS, active=tab_id), 503
+            return render_template("nodata.html", tabs=TABS_BY_TAB[tab_id],
+                                   active=tab_id,
+                                   dash_title=DASH_TITLE_BY_TAB[tab_id]), 503
         g.page_metrics = set()
         page = BUILDERS[tab_id]()
         page["charts"] = [c for c in page["charts"] if c]
@@ -813,7 +1101,8 @@ def create_app():
                            "in more than one selected slice.")
 
         return render_template(
-            "tab.html", tabs=TABS, active=tab_id, page=page,
+            "tab.html", tabs=TABS_BY_TAB[tab_id], active=tab_id, page=page,
+            dash_title=DASH_TITLE_BY_TAB[tab_id],
             built_at=built, age_hours=age_h, freshness=level,
             meta=data.meta(), dim_labels=DIM_LABELS,
             filter_options=data.filter_options(),
@@ -824,10 +1113,11 @@ def create_app():
             filter_note=filter_note,
         )
 
-    for tab_id, path, _label in TABS:
-        if tab_id in ("dictionary", "player"):
-            continue
-        app.add_url_rule(path, tab_id, (lambda t=tab_id: render_tab(t)))
+    for dash in DASHBOARDS:
+        for tab_id, path, _label in dash["tabs"]:
+            if tab_id in ("dictionary", "player"):
+                continue
+            app.add_url_rule(path, tab_id, (lambda t=tab_id: render_tab(t)))
 
     return app
 
