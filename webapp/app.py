@@ -1283,8 +1283,10 @@ def _zsr_category_bars(metric, title, info_key):
             continue
         s = serp.get(name)
         if s and s > 1000:   # skip noise categories
-            rows.append([name.split(data.PAIR_SEP, 1)[1],
-                         round(z / s * 100.0, 1)])
+            cat = name.split(data.PAIR_SEP, 1)[1]
+            if cat == "unknown":
+                cat = "No category selected"
+            rows.append([cat, round(z / s * 100.0, 1)])
     if not rows:
         return None
     rows.sort(key=lambda r: -r[1])
