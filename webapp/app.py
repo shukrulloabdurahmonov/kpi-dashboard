@@ -768,10 +768,13 @@ def _search_kwtable():
             {"key": "searches", "label": "Searches", "num": True},
             {"key": "zsr_pct", "label": "ZSR %", "num": True, "pct": True},
             {"key": "low_pct", "label": "Low-supply %", "num": True, "pct": True},
-            {"key": "avg_results", "label": "Avg results", "num": True},
+            {"key": "avg_results", "label": "Avg results (≤1000)", "num": True},
         ],
         "rows": rows, "platforms": ["Web", "Android", "iOS"],
-        "note": "First-page keyword SERPs, bot-filtered. " + ZSR_PLATFORM_NOTE,
+        "note": "First-page keyword SERPs, bot-filtered. Result counts are "
+                "CAPPED at 1000 by the app, so 'avg results' understates deep "
+                "inventory — broad queries mostly sit at the cap. "
+                + ZSR_PLATFORM_NOTE,
         "info": info("search_keywords_table"),
     }
 

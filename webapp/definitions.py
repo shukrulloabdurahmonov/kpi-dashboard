@@ -524,8 +524,11 @@ METRIC_DEFS.update({
         "source": "hydra.web / hydra.android / hydra.ios (yamato)",
         "grain": "28-day window, refreshed with each search extraction",
         "dims": "platform",
-        "caveats": "ZSR %% is only meaningful on Android (web/iOS auto-extend "
-                   "empty searches).",
+        "caveats": "ZSR % is only meaningful on Android (web/iOS auto-extend "
+                   "empty searches). result_count is capped at 1000 by the "
+                   "app, so avg results understates deep inventory: for broad "
+                   "queries the median search sits at the cap, and filtered "
+                   "searches (region/price/etc.) legitimately return few.",
     },
 })
 
