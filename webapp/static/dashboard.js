@@ -38,7 +38,8 @@
   function periodLabel(p, grain) {
     if (p.length === 7) return MONTHS[+p.slice(5, 7) - 1] + " " + p.slice(2, 4);
     if (p.length === 10) {
-      var d = +p.slice(8, 10) + " " + MONTHS[+p.slice(5, 7) - 1];
+      var d = +p.slice(8, 10) + " " + MONTHS[+p.slice(5, 7) - 1]
+        + " " + p.slice(2, 4);
       return grain === "weekly" ? "wk " + d : d;   // weekly key = its Monday
     }
     return p;
