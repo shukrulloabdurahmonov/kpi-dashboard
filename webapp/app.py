@@ -800,43 +800,35 @@ def _search_zsr_region_bars():
             "note": ZSR_PLATFORM_NOTE, "info": info("search_zsr")}
 
 
-def _search_kwtable():
+def _search_kwtable(flag, title, note):
+    """One keywords table for a filter slice: 1 = narrowed, 0 = bare query."""
     payload = data.search_keywords()
-    if not payload["rows"]:
-        return None
-    hydra_disp = {"web": "Web", "android": "Android", "ios": "iOS"}
     rows = []
-    for (platform, kw, searches, zsr, low, _avg_results, no_filter,
-         avg_filtered, avg_nofilter) in payload["rows"]:
-        platform = hydra_disp.get(platform, platform)
-        filtered = (searches - no_filter) if no_filter is not None else None
+    for platform, kw, filtered, searches, zsr, low, avg_results in payload["rows"]:
+        if filtered != flag:
+            continue
         rows.append([kw, platform, searches,
-                     filtered, avg_filtered,
-                     no_filter, avg_nofilter,
                      round(zsr / searches * 100.0, 1) if searches else None,
-                     round(low / searches * 100.0, 1) if searches else None])
+                     round(low / searches * 100.0, 1) if searches else None,
+                     avg_results])
+    if not rows:
+        return None
     d1, d2 = payload["window"]
     window = (" (%s → %s)" % (d1, d2)) if d1 and d2 else ""
     return {
-        "kind": "kwtable", "title": "Top search keywords — 28 days" + window,
+        "kind": "kwtable", "title": title + " — 28 days" + window,
         "columns": [
             {"key": "keyword", "label": "Keyword"},
             {"key": "platform", "label": "Platform"},
             {"key": "searches", "label": "Searches", "num": True},
-            {"key": "filtered", "label": "With filters", "num": True},
-            {"key": "avg_filtered", "label": "Avg results (filtered)", "num": True},
-            {"key": "no_filter", "label": "No filters", "num": True},
-            {"key": "avg_nofilter", "label": "Avg results (no filters)", "num": True},
             {"key": "zsr_pct", "label": "ZSR %", "num": True, "pct": True},
             {"key": "low_pct", "label": "Low-supply %", "num": True, "pct": True},
+            {"key": "avg_results", "label": "Avg results (≤1000)", "num": True},
         ],
-        "rows": rows, "platforms": ["Web", "Android", "iOS"],
-        "note": "First-page keyword SERPs, bot-filtered. 'With filters' counts "
-                "searches narrowed by any criterion (category, region, price, "
-                "attribute filters); 'No filters' is the bare query. Both avg "
-                "columns are CAPPED at 1000 by the app, so they understate "
-                "deep inventory — bare broad queries mostly sit at the cap. "
-                + ZSR_PLATFORM_NOTE,
+        "rows": rows, "platforms": ["Web", "Android", "iOS"], "wide": True,
+        "note": note + " First-page keyword SERPs, bot-filtered; all figures "
+                "computed over this slice only. Result counts are CAPPED at "
+                "1000 by the app. " + ZSR_PLATFORM_NOTE,
         "info": info("search_keywords_table"),
     }
 
@@ -957,10 +949,15 @@ def build_search():
 
 
 def build_search_keywords():
-    kwtable = _search_kwtable()
-    if kwtable:
-        kwtable["wide"] = True   # sole chart on its tab — span the full grid
-    return {"cards": [], "charts": [kwtable]}
+    return {"cards": [], "charts": [
+        _search_kwtable(
+            1, "Top keywords — searches with filters",
+            "Searches narrowed by any criterion (category, region, price, "
+            "attribute filters); ranked by this slice's own volume."),
+        _search_kwtable(
+            0, "Top keywords — bare queries (no filters)",
+            "Searches with no narrowing at all — the query exactly as typed."),
+    ]}
 
 
 BUILDERS = {

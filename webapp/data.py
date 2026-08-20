@@ -486,9 +486,8 @@ def search_keywords():
     try:
         with _conn() as conn:
             rows = [list(r) for r in conn.execute(
-                "SELECT platform, keyword, searches, zsr, low, avg_results, "
-                "no_filter, avg_rc_filtered, avg_rc_nofilter "
-                "FROM search_keywords ORDER BY searches DESC")]
+                "SELECT platform, keyword, filtered, searches, zsr, low, "
+                "avg_results FROM search_keywords ORDER BY searches DESC")]
     except sqlite3.Error:
         return {"window": [None, None], "rows": []}
     info = snapshot_info()

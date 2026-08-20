@@ -41,14 +41,12 @@ CREATE TABLE IF NOT EXISTS category_tree (
 CREATE TABLE IF NOT EXISTS search_keywords (
   platform    TEXT NOT NULL,
   keyword     TEXT NOT NULL,
+  filtered    INTEGER NOT NULL,  -- 1 = narrowed searches, 0 = bare query
   searches    INTEGER NOT NULL,
   zsr         INTEGER NOT NULL,
   low         INTEGER NOT NULL,
   avg_results REAL,
-  no_filter   INTEGER,
-  avg_rc_filtered REAL,
-  avg_rc_nofilter REAL,
-  PRIMARY KEY (platform, keyword)
+  PRIMARY KEY (platform, keyword, filtered)
 );
 """
 
@@ -68,14 +66,13 @@ def open_store(path):
     conn = sqlite3.connect(str(path))
     conn.execute("PRAGMA journal_mode=DELETE")
     conn.executescript(DDL)
-    # lightweight migrations: stores created before these columns existed
+    # migration: keywords went from one row per (platform, keyword) to one
+    # per (platform, keyword, filtered). Old-shape tables are dropped and
+    # recreated empty — the next payload merge repopulates them fully.
     cols = {r[1] for r in conn.execute("PRAGMA table_info(search_keywords)")}
-    for name, dtype in (("no_filter", "INTEGER"),
-                        ("avg_rc_filtered", "REAL"),
-                        ("avg_rc_nofilter", "REAL")):
-        if name not in cols:
-            conn.execute("ALTER TABLE search_keywords ADD COLUMN %s %s"
-                         % (name, dtype))
+    if cols and "filtered" not in cols:
+        conn.execute("DROP TABLE search_keywords")
+        conn.executescript(DDL)
     conn.commit()
     return conn
 
@@ -146,9 +143,8 @@ def replace_search_keywords(conn, rows, window_start, window_end):
         conn.execute("DELETE FROM search_keywords")
         conn.executemany(
             "INSERT OR REPLACE INTO search_keywords "
-            "(platform, keyword, searches, zsr, low, avg_results, no_filter, "
-            "avg_rc_filtered, avg_rc_nofilter) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
+            "(platform, keyword, filtered, searches, zsr, low, avg_results) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)", rows)
         conn.execute("INSERT OR REPLACE INTO snapshot_info (key, value) "
                      "VALUES ('search_kw_start', ?)", (window_start,))
         conn.execute("INSERT OR REPLACE INTO snapshot_info (key, value) "

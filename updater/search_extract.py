@@ -424,26 +424,33 @@ def pull_hydra_filters(wh, d1, d2):
     return out
 
 
+FILTER_SLICES = {
+    1: "COALESCE(e.filters_count, 0) > 0",   # narrowed searches
+    0: "COALESCE(e.filters_count, 0) = 0",   # bare queries
+}
+
+
 def pull_hydra_keywords(wh, d1, d2):
+    """Top keywords per platform, ranked separately for filtered and bare
+    searches — each slice carries its own zsr/low/avg figures."""
     template = read_sql("hydra_keywords.sql")
     out = []
     for platform, predicate in HYDRA_PLATFORMS.items():
-        sql = template.format(platform=platform, table=platform,
-                              serp_predicate=predicate, d1=d1, d2=d2,
-                              low_min=LOW_MIN, low_max=LOW_MAX,
-                              sentinel=SENTINEL, bot_filter=BOT_FILTER,
-                              top_n=KEYWORD_TOP_N,
-                              min_searches=KEYWORD_MIN_SEARCHES)
-        _, rows = wh.query(sql, None)
         disp = HYDRA_PLATFORM_DISPLAY[platform]
-
-        def r1(v):
-            return round(float(v), 1) if v is not None else None
-
-        out.extend((disp, kw, int(s), int(z), int(lo), r1(a), int(nf),
-                    r1(af), r1(an))
-                   for _p, kw, s, z, lo, a, nf, af, an in rows)
-        log.info("[keywords@%s] %d keywords", platform, len(rows))
+        for flag, fpred in FILTER_SLICES.items():
+            sql = template.format(platform=platform, table=platform,
+                                  serp_predicate=predicate,
+                                  filter_predicate=fpred, d1=d1, d2=d2,
+                                  low_min=LOW_MIN, low_max=LOW_MAX,
+                                  sentinel=SENTINEL, bot_filter=BOT_FILTER,
+                                  top_n=KEYWORD_TOP_N,
+                                  min_searches=KEYWORD_MIN_SEARCHES)
+            _, rows = wh.query(sql, None)
+            out.extend((disp, kw, flag, int(s), int(z), int(lo),
+                        round(float(a), 1) if a is not None else None)
+                       for _p, kw, s, z, lo, a in rows)
+            log.info("[keywords@%s/%s] %d keywords",
+                     platform, "filtered" if flag else "bare", len(rows))
     return out
 
 
