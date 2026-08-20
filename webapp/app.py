@@ -905,7 +905,12 @@ def build_search():
 
     platforms = data.dim_values("search_users", "platform", top_n=4)
     methods = ["Keyword", "Browsing"]
+
+    def section(title):
+        return {"kind": "section", "title": title}
+
     charts = [
+        section("Funnel"),
         _search_funnel_marimekko(),
         _s_line("Funnel conversion trend",
                 [wk_series("search_ssu_adview", "total", data.TOTAL,
@@ -914,6 +919,7 @@ def build_search():
                            "Search → reply")],
                 wk, pct=True, info_key="search_ssu_adview",
                 note="Unweighted average of daily ratios, weekly."),
+        section("Trends & platforms"),
         _s_line("Search users by platform",
                 [wk_series("search_users", "platform", p) for p in platforms],
                 wk, note=AVG_DAILY_NOTE, info_key="search_users"),
@@ -921,6 +927,7 @@ def build_search():
         _s_line("Search volume",
                 [wk_series("search_volume", "total", data.TOTAL, "Searches")],
                 wk, area=True, note=AVG_DAILY_NOTE, info_key="search_volume"),
+        section("Method mix — keyword vs browsing"),
         _method_volume_stacked(wk, methods),
         _s_line("Method share of platform searchers",
                 [wk_series("search_share_on_platform", "method", m)
@@ -933,11 +940,14 @@ def build_search():
                  for m in methods],
                 "daily", note="True daily event totals.",
                 info_key="search_searches"),
+        section("How searches are narrowed"),
         _filter_depth_stacked(),
         _filter_type_bars(),
         _filter_depth_results_bars(),
+        section("Categories"),
         _search_treemap(),
         _search_cat_matrix(),
+        section("Regions & zero results"),
         _search_region_map(),
         _search_zsr_region_bars(),
         _s_line("Zero-result rate trend (Android)",

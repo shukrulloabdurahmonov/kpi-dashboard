@@ -114,6 +114,9 @@ window.CATEGORY_TREE = {{ category_tree | tojson }};
 
 <section class="charts">
   {% for chart in page.charts %}
+  {% if chart.kind == 'section' %}
+  <h2 class="charts-section">{{ chart.title }}</h2>
+  {% else %}
   <figure class="chart-card{{ ' wide' if chart.wide }}" data-chart='{{ chart | tojson }}'>
     <figcaption>{{ chart.title }}{% if chart.unit %} <span class="unit">({{ chart.unit }})</span>{% endif %}
       {% if chart.info %}<button class="info-btn" type="button" data-info="{{ chart.info }}">i</button>{% endif %}
@@ -122,6 +125,7 @@ window.CATEGORY_TREE = {{ category_tree | tojson }};
     <div class="chart-holder"><canvas></canvas></div>
     {% if chart.note %}<div class="chart-note">{{ chart.note }}</div>{% endif %}
   </figure>
+  {% endif %}
   {% endfor %}
 </section>
 
