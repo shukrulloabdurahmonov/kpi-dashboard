@@ -1088,10 +1088,15 @@ def build_search():
         section("Regions & zero results"),
         _search_region_map(),
         _search_zsr_region_bars(),
-        _s_line("Zero-result rate trend (Android)",
-                [{"label": "Android ZSR", "points": _slice_ratio(
-                    "search_zsr", "search_serp", "daily", "platform", "Android")}],
-                "daily", pct=True, note=ZSR_PLATFORM_NOTE, info_key="search_zsr"),
+        _s_line("Zero-result & low-supply trend (Android)",
+                [{"label": "Zero results", "points": _slice_ratio(
+                    "search_zsr", "search_serp", "daily", "platform", "Android")},
+                 {"label": "Low supply (1–10 results)", "points": _slice_ratio(
+                    "search_zsr_low", "search_serp", "daily", "platform",
+                    "Android")}],
+                "daily", pct=True, info_key="search_zsr",
+                note="Share of Android keyword searches returning zero / 1–10 "
+                     "results. " + ZSR_PLATFORM_NOTE),
     ]
     return {"cards": cards, "charts": charts,
             "controls": _search_controls(g)}
