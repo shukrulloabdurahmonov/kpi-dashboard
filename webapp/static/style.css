@@ -789,3 +789,25 @@ body.has-fullscreen { overflow: hidden; }
 }
 .kw-pager button:hover:not(:disabled) { border-color: var(--accent); }
 .kw-pager button:disabled { opacity: 0.4; cursor: default; }
+
+/* --- per-chart grain toggle ---------------------------------------------- */
+.gr-box {
+  display: inline-flex;
+  margin-left: 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+  vertical-align: middle;
+}
+.gr-btn {
+  font: inherit;
+  font-size: 11px;
+  padding: 2px 8px;
+  border: none;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+}
+.gr-btn + .gr-btn { border-left: 1px solid var(--border); }
+.gr-btn:hover { color: var(--ink-2); }
+.gr-btn.active { background: var(--accent); color: #fff; }

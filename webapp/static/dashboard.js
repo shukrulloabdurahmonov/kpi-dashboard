@@ -1383,9 +1383,51 @@
     return eff;
   }
 
+  /* ---- per-chart grain toggle ---------------------------------------------- */
+
+  var GRAIN_SHORT = { daily: "D", weekly: "W", monthly: "M" };
+
+  function applyGrain(spec, gsel) {
+    if (!spec.gdata || !gsel || !spec.gdata[gsel]) return spec;
+    var v = spec.gdata[gsel];
+    var eff = JSON.parse(JSON.stringify(spec));
+    ["series", "cols", "title", "note", "grain"].forEach(function (k) {
+      if (v[k] !== undefined) eff[k] = v[k];
+    });
+    if (eff.pfilter && v.pfdata) eff.pfilter.data = v.pfdata;
+    return eff;
+  }
+
+  function attachGrainToggle(fig, gf) {
+    var cap = fig.querySelector("figcaption");
+    if (!cap) return;
+    fig._gsel = gf.active;
+    var box = document.createElement("span");
+    box.className = "gr-box";
+    gf.grains.forEach(function (g) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "gr-btn" + (g === gf.active ? " active" : "");
+      b.textContent = GRAIN_SHORT[g] || g;
+      b.title = g;
+      b.addEventListener("click", function () {
+        fig._gsel = g;
+        box.querySelectorAll(".gr-btn").forEach(function (x) {
+          x.classList.remove("active");
+        });
+        b.classList.add("active");
+        rebuildChart(fig);
+      });
+      box.appendChild(b);
+    });
+    var fs = cap.querySelector(".fs-btn");
+    cap.insertBefore(box, fs);
+  }
+
   function rebuildChart(fig) {
     var base;
     try { base = JSON.parse(fig.dataset.chart); } catch (e) { return; }
+    base = applyGrain(base, fig._gsel);
     var eff = applyPfilter(base, fig._psel || []);
     var old = fig.querySelector("canvas");
     var inst = old && typeof Chart !== "undefined" && Chart.getChart
@@ -1395,6 +1437,15 @@
     holder.textContent = "";
     holder.style.height = "";
     holder.appendChild(document.createElement("canvas"));
+    // grain variants can retitle the chart; the caption's first node is the
+    // server-rendered title text
+    var cap = fig.querySelector("figcaption");
+    if (eff.title && cap && cap.firstChild
+        && cap.firstChild.nodeType === Node.TEXT_NODE) {
+      cap.firstChild.nodeValue = eff.title;
+    }
+    var noteEl = fig.querySelector(".chart-note");
+    if (eff.note && noteEl) noteEl.textContent = eff.note;
     renderOne(fig, eff);
   }
 
@@ -1478,6 +1529,9 @@
       if (spec.pfilter && spec.pfilter.platforms
           && spec.pfilter.platforms.length > 1) {
         attachPlatformFilter(fig, spec.pfilter);
+      }
+      if (spec.gfilter && spec.gfilter.grains && spec.gfilter.grains.length > 1) {
+        attachGrainToggle(fig, spec.gfilter);
       }
       renderOne(fig, spec);
     });

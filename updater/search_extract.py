@@ -482,16 +482,16 @@ def pull_hydra_zsr_categories(wh, d1, d2):
             for (m, p, dn, dv), v in agg.items()]
 
 
-def pull_hydra_ctr(wh, d1, d2):
-    """Monthly CTR inputs: result-page views (Search vs Navigation) and ad
-    clicks with position buckets. Metrics (all counts, additive):
-       search_ctr_serps, search_ctr_clicks, search_ctr_clicks_p1/_p3/_p40
-    dims: 'search_mode' (Search/Navigation), 'platform|search_mode'."""
+def pull_hydra_ctr(wh, d1, d2, daily_from):
+    """CTR inputs at daily + monthly grain: result-page views (Search vs
+    Navigation) and ad clicks with position buckets. Metrics (all counts,
+    additive): search_ctr_serps, search_ctr_clicks, search_ctr_clicks_p1/
+    _p3/_p40; dims: 'search_mode', 'platform|search_mode'."""
     template = read_sql("hydra_ctr_monthly.sql")
     agg = {}
 
-    def add(metric, period, dim_name, dim_value, v):
-        key = (metric, period, dim_name, dim_value)
+    def add(metric, grain, period, dim_name, dim_value, v):
+        key = (metric, grain, period, dim_name, dim_value)
         agg[key] = agg.get(key, 0) + v
 
     for platform in HYDRA_PLATFORMS:
@@ -502,7 +502,8 @@ def pull_hydra_ctr(wh, d1, d2):
                                   bot_filter=BOT_FILTER)
             cols, rows = wh.query(sql, None)
             for r in dictrows(cols, rows):
-                month = month_key(date.fromisoformat(str(r["month"])[:10]))
+                day = str(r["day"])[:10]
+                month = month_key(date.fromisoformat(day))
                 mode = r["mode"]
                 if r["row_kind"] == "serps":
                     values = (("search_ctr_serps", float(r["n"])),)
@@ -512,13 +513,15 @@ def pull_hydra_ctr(wh, d1, d2):
                               ("search_ctr_clicks_p3", float(r["p3"])),
                               ("search_ctr_clicks_p40", float(r["p40"])))
                 for metric, v in values:
-                    add(metric, month, "search_mode", mode, v)
-                    add(metric, month, "platform|search_mode",
-                        disp + "|" + mode, v)
+                    for grain, period in (("monthly", month), ("daily", day)):
+                        if grain == "daily" and day < daily_from:
+                            continue
+                        add(metric, grain, period, "search_mode", mode, v)
+                        add(metric, grain, period, "platform|search_mode",
+                            disp + "|" + mode, v)
             log.info("[ctr@%s] chunk %s..%s: %d rows",
                      platform, c1, c2, len(rows))
-    return [(m, "monthly", p, dn, dv, v)
-            for (m, p, dn, dv), v in agg.items()]
+    return [(m, g, p, dn, dv, v) for (m, g, p, dn, dv), v in agg.items()]
 
 
 def pull_hydra_keywords(wh, d1, d2):
@@ -657,7 +660,8 @@ def main():
                                           daily_from=daily_start)
                 rows += pull_hydra_filters(wh, hydra_start, yesterday)
                 rows += pull_hydra_zsr_categories(wh, hydra_start, yesterday)
-                rows += pull_hydra_ctr(wh, hydra_start, yesterday)
+                rows += pull_hydra_ctr(wh, hydra_start, yesterday,
+                                       daily_from=daily_start)
                 kw_rows = pull_hydra_keywords(wh, kw_d1, kw_d2)
                 metric_rows += rows
                 latest = max((r[2] for r in rows), default=None)

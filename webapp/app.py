@@ -1024,6 +1024,33 @@ def _serp_totals_table(months=13):
             "info": info("search_serp")}
 
 
+GRAINS_DWM = ("daily", "weekly", "monthly")
+
+
+def _nz(series_list):
+    return [s for s in series_list if s["points"]]
+
+
+def _with_grains(chart, variant_fn, grains=GRAINS_DWM, default="weekly"):
+    """Attach per-chart grain variants (client-side D/W/M toggle). Grains
+    whose data is missing are dropped; a single-grain chart gets no toggle."""
+    if chart is None:
+        return None
+    gd = {}
+    for g in grains:
+        v = variant_fn(g)
+        if v and (v.get("series") or v.get("cols")):
+            gd[g] = v
+    if len(gd) < 2:
+        return chart
+    if default not in gd:
+        default = next(iter(gd))
+    chart["gfilter"] = {"grains": [g for g in grains if g in gd],
+                        "active": default}
+    chart["gdata"] = gd
+    return chart
+
+
 def _with_pf(chart, mode, pdata, approx=False):
     """Attach a client-side platform filter payload to a chart spec."""
     if chart is None or not pdata:
@@ -1042,8 +1069,7 @@ def _with_pf(chart, mode, pdata, approx=False):
 
 
 def build_search():
-    g = _search_ctx()
-    word = GRAIN_WORD[g]
+    g = "weekly"   # each chart carries its own D/W/M toggle; cards are pinned
     cards = [
         _s_card("Search users / day", data.series_at("search_users", g), g,
                 info_key="search_users"),
@@ -1064,59 +1090,118 @@ def build_search():
     def section(title):
         return {"kind": "section", "title": title}
 
+    def mekko_variant(gg):
+        cols = _mekko_cols(gg)
+        if len(cols) < 2:
+            return None
+        word = GRAIN_WORD[gg]
+        return {"cols": cols, "grain": gg,
+                "title": "Search funnel by %s (avg daily users) — last %d %ss"
+                         % (word, len(cols), word),
+                "pfdata": {p: c for p in SEARCH_PLATFORMS
+                           if (c := _mekko_cols(gg, "platform", p))}}
+
+    def conv_variant(gg):
+        series = _nz([{"label": "Search → ad view",
+                       "points": data.series_at("search_ssu_adview", gg)},
+                      {"label": "Search → reply",
+                       "points": data.series_at("search_ssu_lead", gg)}])
+        return {"grain": gg, "series": series,
+                "pfdata": {"Search → ad view": _pp("search_ssu_adview", gg),
+                           "Search → reply": _pp("search_ssu_lead", gg)}} \
+            if series else None
+
+    def users_variant(gg):
+        pp = _pp("search_users", gg)
+        series = [{"label": p, "points": pp[p]} for p in platforms if p in pp]
+        return {"grain": gg, "series": series, "pfdata": {"": pp}} \
+            if series else None
+
+    def mix_variant(gg):
+        ch = _platform_share_area(gg)
+        return ({"grain": gg, "series": ch["series"],
+                 "pfdata": _pp("search_users", gg)} if ch else None)
+
+    def vol_variant(gg):
+        pts = data.series_at("search_volume", gg)
+        return ({"grain": gg,
+                 "series": [{"label": "Searches", "points": pts}],
+                 "pfdata": _pp("search_volume", gg)} if pts else None)
+
+    def mstack_variant(gg):
+        series = _nz([{"label": m,
+                       "points": data.series_at("search_volume", gg,
+                                                "method", m)}
+                      for m in methods])
+        return ({"grain": gg, "series": series,
+                 "pfdata": {m: _pp("search_volume", gg, method=m)
+                            for m in methods}} if series else None)
+
+    def mshare_variant(gg):
+        series = _nz([{"label": m,
+                       "points": data.series_at("search_share_on_platform",
+                                                gg, "method", m)}
+                      for m in methods])
+        return ({"grain": gg, "series": series,
+                 "pfdata": {m: _pp("search_share_on_platform", gg, method=m)
+                            for m in methods}} if series else None)
+
+    def kwb_variant(gg):
+        series = _nz([{"label": m,
+                       "points": data.series_at("search_searches", gg,
+                                                "method", m)}
+                      for m in methods])
+        return ({"grain": gg, "series": series,
+                 "title": "Keyword vs browsing searches (%s event totals)"
+                          % GRAIN_WORD[gg],
+                 "pfdata": {m: _pp("search_searches", gg, method=m)
+                            for m in methods}} if series else None)
+
     users_pp = _pp("search_users", g)
     charts = [
         section("Funnel"),
-        _search_funnel_marimekko(g),
-        _with_pf(
+        _with_grains(_search_funnel_marimekko(g), mekko_variant),
+        _with_grains(_with_pf(
             _s_line("Funnel conversion trend (avg of daily ratios)",
-                    [{"label": "Search → ad view",
-                      "points": data.series_at("search_ssu_adview", g)},
-                     {"label": "Search → reply",
-                      "points": data.series_at("search_ssu_lead", g)}],
+                    conv_variant(g)["series"],
                     g, pct=True, info_key="search_ssu_adview",
-                    note="Unweighted average of daily ratios per %s." % word),
-            "lines", {"Search → ad view": _pp("search_ssu_adview", g),
-                      "Search → reply": _pp("search_ssu_lead", g)}),
+                    note="Unweighted average of daily ratios."),
+            "lines", conv_variant(g)["pfdata"]), conv_variant),
         section("Trends & platforms"),
-        _with_pf(
+        _with_grains(_with_pf(
             _s_line("Search users by platform (avg daily)",
-                    [{"label": p, "points": users_pp[p]}
-                     for p in platforms if p in users_pp],
+                    users_variant(g)["series"],
                     g, note=AVG_DAILY_NOTE, info_key="search_users"),
-            "lines", {"": users_pp}),
-        _with_pf(_platform_share_area(g), "mix", users_pp),
-        _with_pf(
+            "lines", {"": users_pp}), users_variant),
+        _with_grains(_with_pf(_platform_share_area(g), "mix", users_pp),
+                     mix_variant),
+        _with_grains(_with_pf(
             _s_line("Search volume (avg daily)",
                     [{"label": "Searches",
                       "points": data.series_at("search_volume", g)}],
                     g, area=True, note=AVG_DAILY_NOTE, info_key="search_volume"),
-            "sum", _pp("search_volume", g)),
+            "sum", _pp("search_volume", g)), vol_variant),
         _search_totals_table(),
         section("Method mix — keyword vs browsing"),
-        _with_pf(_method_volume_stacked(g, methods),
-                 "sum_series",
-                 {m: _pp("search_volume", g, method=m) for m in methods}),
-        _with_pf(
+        _with_grains(_with_pf(_method_volume_stacked(g, methods),
+                              "sum_series",
+                              {m: _pp("search_volume", g, method=m)
+                               for m in methods}), mstack_variant),
+        _with_grains(_with_pf(
             _s_line("Method share of platform searchers (avg of daily shares)",
-                    [{"label": m,
-                      "points": data.series_at("search_share_on_platform", g,
-                                               "method", m)}
-                     for m in methods],
+                    mshare_variant(g)["series"],
                     g, pct=True, info_key="search_share_on_platform",
                     note="Users can use both methods in a day, so shares can "
                          "sum past 100%."),
-            "lines",
-            {m: _pp("search_share_on_platform", g, method=m) for m in methods}),
-        _with_pf(
-            _s_line("Keyword vs browsing searches (90d)",
-                    [{"label": m,
-                      "points": data.daily("search_searches", "method", m)}
-                     for m in methods],
-                    "daily", note="True daily event totals.",
+            "lines", mshare_variant(g)["pfdata"]), mshare_variant),
+        _with_grains(_with_pf(
+            _s_line("Keyword vs browsing searches (daily event totals)",
+                    kwb_variant("daily")["series"],
+                    "daily", note="True event totals.",
                     info_key="search_searches"),
             "sum_series",
             {m: _pp("search_searches", "daily", method=m) for m in methods}),
+            kwb_variant, grains=("daily", "monthly"), default="daily"),
         section("How searches are narrowed"),
         _filter_depth_stacked(),
         _filter_type_bars(),
@@ -1127,8 +1212,7 @@ def build_search():
         section("Regions"),
         _search_region_map(),
     ]
-    return {"cards": cards, "charts": charts,
-            "controls": _search_controls(g)}
+    return {"cards": cards, "charts": charts}
 
 
 def _zsr_low_region_bars():
@@ -1237,22 +1321,29 @@ def build_search_zsr():
         _s_card("Low-supply searches / month", low_count, "monthly",
                 badge="Android", info_key="search_zsr_low"),
     ]
+    def zsr_trend_variant(gg):
+        series = _nz([{"label": "Zero results", "points": _slice_ratio(
+                          "search_zsr", "search_serp", gg, "platform",
+                          "Android")},
+                      {"label": "Low supply (1–10)", "points": _slice_ratio(
+                          "search_zsr_low", "search_serp", gg, "platform",
+                          "Android")}])
+        return {"grain": gg, "series": series} if series else None
+
+    def low_plat_variant(gg):
+        series = _nz([{"label": p, "points": _slice_ratio(
+                          "search_zsr_low", "search_serp", gg, "platform", p)}
+                      for p in ("Android", "iOS", "Web")])
+        return {"grain": gg, "series": series} if series else None
+
     charts = [
-        _s_line("Zero-result & low-supply rate (Android, monthly)",
-                [{"label": "Zero results", "points": android_zsr},
-                 {"label": "Low supply (1–10)", "points": android_low}],
-                "monthly", pct=True, info_key="search_zsr",
-                note=ZSR_PLATFORM_NOTE),
-        _s_line("Zero-result & low-supply trend (Android, daily 90d)",
-                [{"label": "Zero results", "points": _slice_ratio(
-                    "search_zsr", "search_serp", "daily", "platform",
-                    "Android")},
-                 {"label": "Low supply (1–10)", "points": _slice_ratio(
-                    "search_zsr_low", "search_serp", "daily", "platform",
-                    "Android")}],
-                "daily", pct=True, info_key="search_zsr",
-                note="Share of Android keyword searches returning zero / "
-                     "1–10 results."),
+        _with_grains(
+            _s_line("Zero-result & low-supply rate (Android)",
+                    zsr_trend_variant("daily")["series"],
+                    "daily", pct=True, info_key="search_zsr",
+                    note="Share of Android keyword searches returning zero / "
+                         "1–10 results. " + ZSR_PLATFORM_NOTE),
+            zsr_trend_variant, grains=("daily", "monthly"), default="daily"),
         _search_zsr_region_bars(),
         _zsr_low_region_bars(),
         _zsr_category_bars("search_zsr",
@@ -1261,14 +1352,14 @@ def build_search_zsr():
         _zsr_category_bars("search_zsr_low",
                            "Low-supply rate by category (Android)",
                            "search_zsr_low"),
-        _s_line("Low-supply rate by platform (daily 90d)",
-                [{"label": p, "points": _slice_ratio(
-                    "search_zsr_low", "search_serp", "daily", "platform", p)}
-                 for p in ("Android", "iOS", "Web")],
-                "daily", pct=True, info_key="search_zsr_low",
-                note="Unlike hard zeros, the 1–10 results band is meaningful "
-                     "on every platform (the auto-extend fallback only kicks "
-                     "in on empty results)."),
+        _with_grains(
+            _s_line("Low-supply rate by platform",
+                    low_plat_variant("daily")["series"],
+                    "daily", pct=True, info_key="search_zsr_low",
+                    note="Unlike hard zeros, the 1–10 results band is "
+                         "meaningful on every platform (the auto-extend "
+                         "fallback only kicks in on empty results)."),
+            low_plat_variant, grains=("daily", "monthly"), default="daily"),
         _zsr_top_keywords_table(),
         _serp_totals_table(),
     ]
@@ -1286,14 +1377,19 @@ def _ctr_ratio(bucket, mode, grain="monthly"):
 
 
 def _ctr_trend(mode):
-    series = [{"label": "CTR@" + b[1:], "points": _ctr_ratio(b, mode)}
-              for b in ("p1", "p3", "p40")]
-    series = [s for s in series if s["points"]]
-    if not series:
+    def variant(gg):
+        series = _nz([{"label": "CTR@" + b[1:],
+                       "points": _ctr_ratio(b, mode, gg)}
+                      for b in ("p1", "p3", "p40")])
+        return {"grain": gg, "series": series} if series else None
+
+    base = variant("monthly")
+    if base is None:
         return None
-    return _s_line("CTR trend — %s (monthly)" % mode.lower(), series,
-                   "monthly", pct=True, info_key="search_ctr",
-                   note=CTR_NOTE)
+    return _with_grains(
+        _s_line("CTR trend — %s" % mode.lower(), base["series"],
+                "monthly", pct=True, info_key="search_ctr", note=CTR_NOTE),
+        variant, grains=("daily", "monthly"), default="monthly")
 
 
 def _ctr_platform_bars(mode):
