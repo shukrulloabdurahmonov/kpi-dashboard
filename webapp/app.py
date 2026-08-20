@@ -16,6 +16,7 @@ import secrets
 import time
 import urllib.parse
 import urllib.request
+from pathlib import Path
 from urllib.parse import quote
 
 from flask import (
@@ -1824,10 +1825,22 @@ def create_app():
         m = data.meta() if data.available() else {}
         extracted = {k: (m.get(k) or {}).get("extracted_at_utc")
                      for k in ("search_trino", "search_hydra")}
+        # render the ACTUAL extraction queries so this page can't drift from
+        # the code; the sql/search dir ships with the repo checkout
+        trino_sqls, hydra_sqls = [], []
+        sql_dir = Path(__file__).resolve().parent.parent / "sql" / "search"
+        try:
+            for f in sorted(sql_dir.glob("*.sql")):
+                entry = {"name": f.name, "text": f.read_text()}
+                (hydra_sqls if f.name.startswith("hydra_")
+                 else trino_sqls).append(entry)
+        except OSError:
+            pass
         return render_template(
             "search_methodology.html", tabs=SEARCH_TABS,
             active="search_methodology", built_at=built, age_hours=age_h,
             freshness=level, dash_title=SEARCH_DASH_TITLE, extracted=extracted,
+            trino_sqls=trino_sqls, hydra_sqls=hydra_sqls,
         )
 
     def render_tab(tab_id):

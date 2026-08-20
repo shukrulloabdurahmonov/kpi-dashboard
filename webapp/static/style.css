@@ -811,3 +811,18 @@ body.has-fullscreen { overflow: hidden; }
 .gr-btn + .gr-btn { border-left: 1px solid var(--border); }
 .gr-btn:hover { color: var(--ink-2); }
 .gr-btn.active { background: var(--accent); color: #fff; }
+
+/* --- methodology: schema tables + collapsible SQL ----------------------- */
+.method h4 { font-size: 13.5px; margin: 18px 0 8px; color: var(--ink-2); }
+.method table.dict { font-size: 12.5px; margin-bottom: 6px; }
+.sql-file { margin: 6px 0; }
+.sql-file summary { cursor: pointer; color: var(--accent); font-size: 13px; }
+.sql-file pre {
+  background: var(--page);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  font-size: 12px;
+  line-height: 1.45;
+}

@@ -46,6 +46,35 @@
     <li><strong>TGV is not tracked for UZ</strong> — all TGV columns in the
       source are legitimately 0 and are excluded from this dashboard.</li>
   </ul>
+  <h4>Source tables (columns used)</h4>
+  <table class="dict">
+    <thead><tr><th>Table</th><th>Grain</th><th>Columns used</th></tr></thead>
+    <tbody>
+      <tr><td><code>glue.odyn_search_and_ad_ranking.daily_search_users_kpis</code></td>
+          <td>day × country × platform × search_method × finance_category_l2</td>
+          <td><code>date_day, country, platform, search_method,
+              finance_category_l2, users_search, users_adview,
+              users_lead</code></td></tr>
+      <tr><td><code>glue.odyn_search_and_ad_ranking.daily_search_volume_kpis</code></td>
+          <td>same keys as users_kpis</td>
+          <td><code>volume_search, volume_adview, volume_lead</code>
+              (joined 1:1 on the keys)</td></tr>
+      <tr><td><code>glue.odyn_search_and_ad_ranking.daily_user_searches</code></td>
+          <td>day × country (partition) × platform × keyword × category</td>
+          <td><code>date_day, country ('UZ'), platform, keyword,
+              category_l1..l3, searches</code></td></tr>
+      <tr><td><code>...reservoir_eu_bi_eu_bi_dim_categories</code></td>
+          <td>category dimension</td>
+          <td><code>category_nk, site_sk,
+              finance_category_l1/l2_name_en</code></td></tr>
+    </tbody>
+  </table>
+  <h4>Queries used (live from the repo)</h4>
+  {% for q in trino_sqls %}
+  <details class="sql-file"><summary><code>sql/search/{{ q.name }}</code></summary>
+    <pre><code>{{ q.text }}</code></pre>
+  </details>
+  {% endfor %}
 </section>
 
 <section>
@@ -77,6 +106,41 @@
       <code>LOWER(BTRIM(keyword))</code>-normalized, with ZSR %, low-supply %
       and average result count. ZSR % is only meaningful on Android.</li>
   </ul>
+  <h4>Source tables (columns used)</h4>
+  <table class="dict">
+    <thead><tr><th>Table</th><th>Role</th><th>Columns used</th></tr></thead>
+    <tbody>
+      <tr><td><code>hydra.web / hydra.android / hydra.ios</code></td>
+          <td>raw clickstream, one table per platform (UZ retention from
+              2025-07-02)</td>
+          <td><code>server_date_day, country_code, eventname, trackpage,
+              page_nb, keyword, result_count, ad_position, filters,
+              filters_count, cat_l1_id, region_id, price_from/price_to
+              (web: filters_price_*), search_id, session_long, user_agent,
+              ip_address</code></td></tr>
+      <tr><td><code>eu_bi.map_ip_blacklist</code></td>
+          <td>bot IP filter (joined on <code>ip_address</code>)</td>
+          <td><code>crawler_ip_hash</code></td></tr>
+      <tr><td><code>eu_bi.dim_categories</code></td>
+          <td>category L1 names for the ZSR category split</td>
+          <td><code>category_l1_nk, category_l1_name_lc
+              (site_sk = 'olx|eu|uz')</code></td></tr>
+      <tr><td><code>livesync.cee_olxuz_regions</code></td>
+          <td>region names (mapped to the app's region spellings)</td>
+          <td><code>id, name_ru</code></td></tr>
+    </tbody>
+  </table>
+  <h4>Queries used (live from the repo)</h4>
+  <p class="dict-intro">Placeholders like <code>{{ '{table}' }}</code>,
+    <code>{{ '{d1}' }}</code>/<code>{{ '{d2}' }}</code> and
+    <code>{{ '{bot_filter}' }}</code> are filled per platform and month chunk
+    by <code>updater/search_extract.py</code>; the bot filter is the 17-rule
+    house standard.</p>
+  {% for q in hydra_sqls %}
+  <details class="sql-file"><summary><code>sql/search/{{ q.name }}</code></summary>
+    <pre><code>{{ q.text }}</code></pre>
+  </details>
+  {% endfor %}
 </section>
 
 <section>
