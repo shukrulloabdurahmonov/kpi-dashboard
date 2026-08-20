@@ -772,7 +772,7 @@ def _filter_depth_stacked(plat=""):
     series = [s for s in series if s["points"]]
     if not series:
         return None
-    return {"kind": "stacked", "title": "Keyword searches by filter depth",
+    return {"kind": "stacked", "title": "Keyword searches by filter depth (monthly totals)",
             "unit": None, "grain": "monthly", "series": series,
             "note": _noplat("Narrowing criteria per search: category, region, "
                             "price and attribute filters all count. Fixed "
@@ -789,11 +789,12 @@ def _filter_type_bars(plat=""):
     if not rows or not serp:
         return None
     pct_rows = [[name, round(v / serp * 100.0, 1)] for name, v in rows]
-    return {"kind": "barh", "title": "Searches using each filter type — " + period,
+    return {"kind": "barh",
+            "title": "Searches using each filter type — share of %s's searches" % period,
             "unit": "%", "rows": pct_rows,
-            "note": _noplat("Share of keyword searches. Overlapping — one "
-                            "search can use several criteria, so shares can "
-                            "sum past 100%.", plat),
+            "note": _noplat("Share of the month's TOTAL keyword searches (event "
+                            "counts). Overlapping — one search can use several "
+                            "criteria, so shares can sum past 100%.", plat),
             "info": info("search_filter_use")}
 
 
@@ -808,10 +809,12 @@ def _filter_depth_results_bars(plat=""):
     if not rows:
         return None
     return {"kind": "barh",
-            "title": "Avg results (≤1000) by filter depth — " + period,
+            "title": "Avg results per search (≤1000) by filter depth — " + period,
             "rows": rows,
-            "note": _noplat("Each narrowing criterion shrinks the result set. "
-                            "The app caps result counts at 1000, so the "
+            "note": _noplat("AVERAGE result count per search over all of the "
+                            "month's searches in each bucket — not a total. "
+                            "Each narrowing criterion shrinks the result set; "
+                            "the app caps result counts at 1000, so the "
                             "unfiltered bar is understated the most.", plat),
             "info": info("search_filter_avg_results")}
 
