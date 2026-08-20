@@ -192,32 +192,42 @@ def pct(v):
 
 # --- Trino pulls (each returns [(metric, grain, period, dim_name, dim_value, value)])
 
-def pull_weekly_funnel(tc, start):
-    cols, rows = trino_query(tc, read_sql("weekly_funnel.sql").format(start=start))
+FUNNEL_VALUE_MAP = [
+    ("search_users", "users_search", None),
+    ("search_users_adview", "users_adview", None),
+    ("search_users_lead", "users_lead", None),
+    ("search_volume", "volume_search", None),
+    ("search_volume_adview", "volume_adview", None),
+    ("search_volume_lead", "volume_lead", None),
+    ("search_ssu_adview", "ssu_adview", pct),
+    ("search_ssu_lead", "ssu_lead", pct),
+    ("search_avg_adview_su", "avg_adview_su", float),
+    ("search_avg_lead_su", "avg_lead_su", float),
+    ("search_share_on_platform", "share_search_on_platform", pct),
+]
+
+
+def _pull_funnel(tc, sql_name, period_col, grain, start):
+    cols, rows = trino_query(tc, read_sql(sql_name).format(start=start))
     out = []
-    value_map = [
-        ("search_users", "users_search", None),
-        ("search_users_adview", "users_adview", None),
-        ("search_users_lead", "users_lead", None),
-        ("search_volume", "volume_search", None),
-        ("search_volume_adview", "volume_adview", None),
-        ("search_volume_lead", "volume_lead", None),
-        ("search_ssu_adview", "ssu_adview", pct),
-        ("search_ssu_lead", "ssu_lead", pct),
-        ("search_avg_adview_su", "avg_adview_su", float),
-        ("search_avg_lead_su", "avg_lead_su", float),
-        ("search_share_on_platform", "share_search_on_platform", pct),
-    ]
     for r in dictrows(cols, rows):
-        period = str(r["week_start"])[:10]
+        period = str(r[period_col])[:10]
         dim_name, dim_value = base_dims(r["platform"], r["search_method"])
-        for metric, col, conv in value_map:
+        for metric, col, conv in FUNNEL_VALUE_MAP:
             v = r.get(col)
             if v is None:
                 continue
-            out.append((metric, "weekly", period, dim_name, dim_value,
+            out.append((metric, grain, period, dim_name, dim_value,
                         conv(v) if conv else float(v)))
     return out
+
+
+def pull_weekly_funnel(tc, start):
+    return _pull_funnel(tc, "weekly_funnel.sql", "week_start", "weekly", start)
+
+
+def pull_daily_funnel(tc, start):
+    return _pull_funnel(tc, "daily_funnel.sql", "period_day", "daily", start)
 
 
 def pull_monthly_by_category(tc, start):
@@ -540,6 +550,8 @@ def main():
             rows = []
             rows += pull_weekly_funnel(tc, weekly_start)
             log.info("[trino] weekly funnel: %d rows total", len(rows))
+            rows += pull_daily_funnel(tc, daily_start)
+            log.info("[trino] + daily funnel: %d rows total", len(rows))
             rows += pull_monthly_by_category(tc, monthly_start)
             rows += pull_monthly_searches(tc, monthly_start)
             rows += pull_daily_searches(tc, daily_start)

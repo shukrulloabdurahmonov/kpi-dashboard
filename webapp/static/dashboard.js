@@ -239,7 +239,7 @@
   function initLoading() {
     var form = document.getElementById("filter-form");
     if (form) form.addEventListener("submit", function () { showLoading(); });
-    document.querySelectorAll(".grain-toggle a, nav.tabs a, .topbar .back, .filters-clear")
+    document.querySelectorAll(".grain-toggle a, nav.tabs a, .topbar .back, .pc-chip, .filters-clear")
       .forEach(function (a) {
         a.addEventListener("click", function (ev) {
           // let open-in-new-tab clicks through without an overlay

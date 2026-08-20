@@ -698,6 +698,32 @@ body.has-fullscreen { overflow: hidden; }
 .method code { font-size: 12.5px; }
 
 .chart-card.wide { grid-column: 1 / -1; }
+.page-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.pc-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.pc-chip {
+  font-size: 12.5px;
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-2);
+  text-decoration: none;
+}
+.pc-chip:hover { border-color: var(--accent); }
+.pc-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.page-controls .grain-toggle {
+  margin-left: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  display: inline-flex;
+}
 .charts-section {
   grid-column: 1 / -1;
   margin: 14px 0 -4px;
