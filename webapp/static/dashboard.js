@@ -533,6 +533,16 @@
     var scales = baseScales(pal, false);
     scales.x.stacked = true;
     scales.y.stacked = true;
+    // stacked segments are additive by construction — the tooltip footer
+    // shows the stack's total
+    var tt = tooltipOpts(pal, false);
+    tt.callbacks = tt.callbacks || {};
+    tt.callbacks.footer = function (items) {
+      var sum = 0;
+      items.forEach(function (it) { sum += it.parsed.y || 0; });
+      return "Total: " + fmtFull(sum);
+    };
+    tt.footerColor = pal.ink;
     charts.push(new Chart(canvas, {
       type: "bar",
       data: { labels: periods.map(function (p) { return periodLabel(p, spec.grain); }),
@@ -542,7 +552,7 @@
         interaction: { mode: "index", intersect: false },
         plugins: {
           legend: { display: true, labels: { color: pal.ink2, boxWidth: 12, boxHeight: 12 } },
-          tooltip: tooltipOpts(pal, false)
+          tooltip: tt
         },
         scales: scales
       }
