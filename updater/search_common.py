@@ -41,6 +41,11 @@ HYDRA_METRICS = [
     "search_filter_depth",        # searches by number of narrowing criteria
     "search_filter_avg_results",  # avg result count (capped 1000) per depth
     "search_filter_use",          # searches using each criterion type (overlapping)
+    "search_ctr_serps",           # result-page views (Search vs Navigation)
+    "search_ctr_clicks",          # ad clicks on result pages
+    "search_ctr_clicks_p1",       # ...on position 1
+    "search_ctr_clicks_p3",       # ...on positions 1-3
+    "search_ctr_clicks_p40",      # ...on positions 1-40 (~first page)
 ]
 
 # ratio/average metrics whose slices must never be summed

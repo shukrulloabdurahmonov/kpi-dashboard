@@ -42,6 +42,8 @@ TABS = KPI_TABS  # legacy alias; hand routes below still reference it
 
 SEARCH_TABS = [
     ("search", "/search", "Search"),
+    ("search_zsr", "/search/zsr", "Zero results"),
+    ("search_ctr", "/search/ctr", "CTR"),
     ("search_keywords", "/search/keywords", "Keywords"),
     ("search_methodology", "/search/methodology", "Methodology"),
     ("search_definitions", "/search/definitions", "Definitions"),
@@ -1042,8 +1044,6 @@ def _with_pf(chart, mode, pdata, approx=False):
 def build_search():
     g = _search_ctx()
     word = GRAIN_WORD[g]
-    android_zsr = _slice_ratio("search_zsr", "search_serp", "monthly",
-                               "platform", "Android")
     cards = [
         _s_card("Search users / day", data.series_at("search_users", g), g,
                 info_key="search_users"),
@@ -1054,8 +1054,6 @@ def build_search():
                 fmt="pct", info_key="search_ssu_adview"),
         _s_card("Search → reply", data.series_at("search_ssu_lead", g), g,
                 fmt="pct", info_key="search_ssu_lead"),
-        _s_card("Zero-result rate", android_zsr, "monthly", fmt="pct",
-                badge="Android only", info_key="search_zsr"),
         _s_card("Searches / day (events)", data.daily("search_searches"),
                 "daily", info_key="search_searches"),
     ]
@@ -1126,22 +1124,252 @@ def build_search():
         section("Categories"),
         _search_treemap(),
         _search_cat_matrix(),
-        section("Regions & zero results"),
+        section("Regions"),
         _search_region_map(),
-        _search_zsr_region_bars(),
-        _s_line("Zero-result & low-supply trend (Android)",
-                [{"label": "Zero results", "points": _slice_ratio(
-                    "search_zsr", "search_serp", "daily", "platform", "Android")},
-                 {"label": "Low supply (1–10 results)", "points": _slice_ratio(
-                    "search_zsr_low", "search_serp", "daily", "platform",
-                    "Android")}],
-                "daily", pct=True, info_key="search_zsr",
-                note="Share of Android keyword searches returning zero / 1–10 "
-                     "results. " + ZSR_PLATFORM_NOTE),
-        _serp_totals_table(),
     ]
     return {"cards": cards, "charts": charts,
             "controls": _search_controls(g)}
+
+
+def _zsr_low_region_bars():
+    period = data.latest_full_period("search_zsr_low", "monthly",
+                                     "platform|region")
+    if period is None:
+        return None
+    _, low_rows = data.breakdown("search_zsr_low", "platform|region",
+                                 period=period, top_n=100)
+    _, serp_rows = data.breakdown("search_serp", "platform|region",
+                                  period=period, top_n=100)
+    serp = dict(serp_rows)
+    rows = []
+    for name, z in low_rows:
+        if not name.startswith("Android" + data.PAIR_SEP):
+            continue
+        s = serp.get(name)
+        if s:
+            rows.append([name.split(data.PAIR_SEP, 1)[1],
+                         round(z / s * 100.0, 1)])
+    if not rows:
+        return None
+    rows.sort(key=lambda r: -r[1])
+    return {"kind": "barh",
+            "title": "Low-supply rate by region (Android) — " + period,
+            "unit": "%", "rows": rows,
+            "note": "Share of keyword searches returning 1–10 results.",
+            "info": info("search_zsr_low")}
+
+
+def _zsr_category_bars(metric, title, info_key):
+    period = data.latest_full_period(metric, "monthly", "platform|zsr_category")
+    if period is None:
+        return None
+    _, num_rows = data.breakdown(metric, "platform|zsr_category",
+                                 period=period, top_n=200)
+    _, serp_rows = data.breakdown("search_serp", "platform|zsr_category",
+                                  period=period, top_n=200)
+    serp = dict(serp_rows)
+    rows = []
+    for name, z in num_rows:
+        if not name.startswith("Android" + data.PAIR_SEP):
+            continue
+        s = serp.get(name)
+        if s and s > 1000:   # skip noise categories
+            rows.append([name.split(data.PAIR_SEP, 1)[1],
+                         round(z / s * 100.0, 1)])
+    if not rows:
+        return None
+    rows.sort(key=lambda r: -r[1])
+    return {"kind": "barh", "title": title + " — " + period,
+            "unit": "%", "rows": rows[:14],
+            "note": "Android keyword searches, by the category the search "
+                    "was made in (category L1).",
+            "info": info(info_key)}
+
+
+def _zsr_top_keywords_table(top_n=15):
+    """Top Android keywords by zero-result searches, both filter slices
+    combined — derived from the keywords store, no extra query."""
+    payload = data.search_keywords()
+    agg = {}
+    for platform, kw, _f, searches, zsr, low, _avg in payload["rows"]:
+        if platform != "Android":
+            continue
+        a = agg.setdefault(kw, [0, 0, 0])
+        a[0] += searches
+        a[1] += zsr
+        a[2] += low
+    rows = sorted(([kw, s, z, round(z / s * 100.0, 1) if s else None, lo]
+                   for kw, (s, z, lo) in agg.items() if z),
+                  key=lambda r: -r[2])[:top_n]
+    if not rows:
+        return None
+    d1, d2 = payload["window"]
+    window = (" (%s → %s)" % (d1, d2)) if d1 and d2 else ""
+    return {"kind": "table",
+            "title": "Top zero-result keywords (Android) — 28 days" + window,
+            "columns": [{"label": "Keyword"},
+                        {"label": "Searches", "num": True},
+                        {"label": "Zero results", "num": True},
+                        {"label": "ZSR %", "num": True},
+                        {"label": "Low supply", "num": True}],
+            "rows": rows,
+            "note": "Ranked by zero-result search count; filtered and bare "
+                    "searches combined. These are the supply gaps users hit "
+                    "most often.",
+            "info": info("search_zsr")}
+
+
+def build_search_zsr():
+    android_zsr = _slice_ratio("search_zsr", "search_serp", "monthly",
+                               "platform", "Android")
+    android_low = _slice_ratio("search_zsr_low", "search_serp", "monthly",
+                               "platform", "Android")
+    zsr_count = data.series_at("search_zsr", "monthly", "platform", "Android")
+    low_count = data.series_at("search_zsr_low", "monthly", "platform",
+                               "Android")
+    cards = [
+        _s_card("Zero-result rate", android_zsr, "monthly", fmt="pct",
+                badge="Android only", info_key="search_zsr"),
+        _s_card("Low-supply rate (1–10)", android_low, "monthly", fmt="pct",
+                badge="Android only", info_key="search_zsr_low"),
+        _s_card("Zero-result searches / month", zsr_count, "monthly",
+                badge="Android", info_key="search_zsr"),
+        _s_card("Low-supply searches / month", low_count, "monthly",
+                badge="Android", info_key="search_zsr_low"),
+    ]
+    charts = [
+        _s_line("Zero-result & low-supply rate (Android, monthly)",
+                [{"label": "Zero results", "points": android_zsr},
+                 {"label": "Low supply (1–10)", "points": android_low}],
+                "monthly", pct=True, info_key="search_zsr",
+                note=ZSR_PLATFORM_NOTE),
+        _s_line("Zero-result & low-supply trend (Android, daily 90d)",
+                [{"label": "Zero results", "points": _slice_ratio(
+                    "search_zsr", "search_serp", "daily", "platform",
+                    "Android")},
+                 {"label": "Low supply (1–10)", "points": _slice_ratio(
+                    "search_zsr_low", "search_serp", "daily", "platform",
+                    "Android")}],
+                "daily", pct=True, info_key="search_zsr",
+                note="Share of Android keyword searches returning zero / "
+                     "1–10 results."),
+        _search_zsr_region_bars(),
+        _zsr_low_region_bars(),
+        _zsr_category_bars("search_zsr",
+                           "Zero-result rate by category (Android)",
+                           "search_zsr"),
+        _zsr_category_bars("search_zsr_low",
+                           "Low-supply rate by category (Android)",
+                           "search_zsr_low"),
+        _s_line("Low-supply rate by platform (daily 90d)",
+                [{"label": p, "points": _slice_ratio(
+                    "search_zsr_low", "search_serp", "daily", "platform", p)}
+                 for p in ("Android", "iOS", "Web")],
+                "daily", pct=True, info_key="search_zsr_low",
+                note="Unlike hard zeros, the 1–10 results band is meaningful "
+                     "on every platform (the auto-extend fallback only kicks "
+                     "in on empty results)."),
+        _zsr_top_keywords_table(),
+        _serp_totals_table(),
+    ]
+    return {"cards": cards, "charts": charts}
+
+
+CTR_NOTE = ("CTR@N = ad clicks on positions ≤ N per 100 result-page views — "
+            "an event-level rate (several clicks from one page all count), "
+            "not a per-session deduplicated rate. Position 40 ≈ one page.")
+
+
+def _ctr_ratio(bucket, mode, grain="monthly"):
+    return _slice_ratio("search_ctr_clicks_" + bucket, "search_ctr_serps",
+                        grain, "search_mode", mode)
+
+
+def _ctr_trend(mode):
+    series = [{"label": "CTR@" + b[1:], "points": _ctr_ratio(b, mode)}
+              for b in ("p1", "p3", "p40")]
+    series = [s for s in series if s["points"]]
+    if not series:
+        return None
+    return _s_line("CTR trend — %s (monthly)" % mode.lower(), series,
+                   "monthly", pct=True, info_key="search_ctr",
+                   note=CTR_NOTE)
+
+
+def _ctr_platform_bars(mode):
+    period = data.latest_full_period("search_ctr_clicks_p40", "monthly",
+                                     "platform|search_mode")
+    if period is None:
+        return None
+    _, clicks = data.breakdown("search_ctr_clicks_p40", "platform|search_mode",
+                               period=period, top_n=50)
+    _, serps = data.breakdown("search_ctr_serps", "platform|search_mode",
+                              period=period, top_n=50)
+    serp = dict(serps)
+    rows = []
+    for name, c in clicks:
+        if not name.endswith(data.PAIR_SEP + mode):
+            continue
+        s = serp.get(name)
+        if s:
+            rows.append([name.split(data.PAIR_SEP, 1)[0],
+                         round(c / s * 100.0, 1)])
+    if not rows:
+        return None
+    rows.sort(key=lambda r: -r[1])
+    return {"kind": "barh",
+            "title": "CTR@40 by platform — %s, %s" % (mode.lower(), period),
+            "unit": "%", "rows": rows, "note": CTR_NOTE,
+            "info": info("search_ctr")}
+
+
+def _ctr_totals_table(months=13):
+    serps_s = dict(data.series("search_ctr_serps", "monthly",
+                               "search_mode", "Search"))
+    serps_n = dict(data.series("search_ctr_serps", "monthly",
+                               "search_mode", "Navigation"))
+    clicks_s = dict(data.series("search_ctr_clicks", "monthly",
+                                "search_mode", "Search"))
+    clicks_n = dict(data.series("search_ctr_clicks", "monthly",
+                                "search_mode", "Navigation"))
+    cutoff = data.current_period_key("monthly")
+    months_list = sorted((set(serps_s) | set(serps_n)) - {cutoff})[-months:]
+    if not months_list:
+        return None
+    rows = [[m, serps_s.get(m), clicks_s.get(m), serps_n.get(m),
+             clicks_n.get(m)] for m in reversed(months_list)]
+    return {"kind": "table",
+            "title": "Result-page views & ad clicks by month (event counts)",
+            "columns": [{"label": "Month"},
+                        {"label": "Search SERPs", "num": True},
+                        {"label": "Search clicks", "num": True},
+                        {"label": "Navigation pages", "num": True},
+                        {"label": "Navigation clicks", "num": True}],
+            "rows": rows,
+            "note": "True totals across all platforms. Search = typed "
+                    "keyword; Navigation = category browsing without one.",
+            "info": info("search_ctr")}
+
+
+def build_search_ctr():
+    cards = [
+        _s_card("CTR@1 — search", _ctr_ratio("p1", "Search"), "monthly",
+                fmt="pct", info_key="search_ctr"),
+        _s_card("CTR@3 — search", _ctr_ratio("p3", "Search"), "monthly",
+                fmt="pct", info_key="search_ctr"),
+        _s_card("CTR@40 — search", _ctr_ratio("p40", "Search"), "monthly",
+                fmt="pct", info_key="search_ctr"),
+        _s_card("CTR@40 — navigation", _ctr_ratio("p40", "Navigation"),
+                "monthly", fmt="pct", info_key="search_ctr"),
+    ]
+    charts = [
+        _ctr_trend("Search"),
+        _ctr_trend("Navigation"),
+        _ctr_platform_bars("Search"),
+        _ctr_platform_bars("Navigation"),
+        _ctr_totals_table(),
+    ]
+    return {"cards": cards, "charts": charts}
 
 
 def build_search_keywords():
@@ -1164,6 +1392,8 @@ BUILDERS = {
     "monetization": build_monetization,
     "users": build_users,
     "search": build_search,
+    "search_zsr": build_search_zsr,
+    "search_ctr": build_search_ctr,
     "search_keywords": build_search_keywords,
 }
 

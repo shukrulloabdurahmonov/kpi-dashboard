@@ -548,6 +548,20 @@ METRIC_DEFS.update({
         "caveats": "OVERLAPPING — one search can use several criteria, so type "
                    "shares can sum past 100%.",
     },
+    "search_ctr": {
+        "label": "CTR@1 / CTR@3 / CTR@40",
+        "definition": "Ad clicks on result positions ≤ 1 / ≤ 3 / ≤ 40 per 100 "
+                      "result-page views. Split by mode: Search (typed keyword) "
+                      "vs Navigation (category browsing without a keyword).",
+        "formula": "COUNT(ad_click, ad_position <= N, listing page) / "
+                   "COUNT(first-page listing views) * 100, per mode",
+        "source": "hydra.web / hydra.android / hydra.ios (yamato)",
+        "grain": "monthly",
+        "dims": "mode (Search/Navigation), platform",
+        "caveats": "Event-level rate: several clicks from one page all count, "
+                   "so it is not a per-session deduplicated CTR and CAN exceed "
+                   "100%. Position 40 ≈ one result page.",
+    },
     "search_keywords_table": {
         "label": "Top search keywords",
         "definition": "Most-searched keywords over the last 28 days with their "

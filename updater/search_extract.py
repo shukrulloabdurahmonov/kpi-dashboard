@@ -79,6 +79,13 @@ HYDRA_PLATFORMS = {
     "android": "e.eventname IS NULL AND e.trackpage = 'listing' AND e.keyword <> ''",
     "ios":     "e.eventname IS NULL AND e.trackpage = 'listing' AND e.keyword <> ''",
 }
+# same pages WITHOUT the keyword requirement — includes category browsing
+# ("navigation") result pages, the CTR denominator
+HYDRA_LISTING = {
+    "web":     "e.eventname = 'listing'",
+    "android": "e.eventname IS NULL AND e.trackpage = 'listing'",
+    "ios":     "e.eventname IS NULL AND e.trackpage = 'listing'",
+}
 HYDRA_PLATFORM_DISPLAY = {"web": "Web", "android": "Android", "ios": "iOS"}
 
 # Bot filter copied from colibri impressions_daily.py (the house standard).
@@ -440,6 +447,80 @@ FILTER_SLICES = {
 }
 
 
+def pull_hydra_zsr_categories(wh, d1, d2):
+    """Monthly zero-result / low-supply split by category L1:
+       search_serp / search_zsr / search_zsr_low under dims
+       'zsr_category' (all platforms summed) and 'platform|zsr_category'."""
+    template = read_sql("hydra_zsr_categories.sql")
+    agg = {}
+
+    def add(metric, period, dim_name, dim_value, v):
+        key = (metric, period, dim_name, dim_value)
+        agg[key] = agg.get(key, 0) + v
+
+    for platform, predicate in HYDRA_PLATFORMS.items():
+        disp = HYDRA_PLATFORM_DISPLAY[platform]
+        for c1, c2 in month_chunks(d1, d2):
+            sql = template.format(platform=platform, table=platform,
+                                  serp_predicate=predicate, d1=c1, d2=c2,
+                                  low_min=LOW_MIN, low_max=LOW_MAX,
+                                  sentinel=SENTINEL, bot_filter=BOT_FILTER)
+            cols, rows = wh.query(sql, None)
+            for r in dictrows(cols, rows):
+                month = month_key(date.fromisoformat(str(r["month"])[:10]))
+                cat = str(r["category"])
+                for metric, col in (("search_serp", "searches"),
+                                    ("search_zsr", "zsr"),
+                                    ("search_zsr_low", "low")):
+                    v = float(r[col])
+                    add(metric, month, "zsr_category", cat, v)
+                    add(metric, month, "platform|zsr_category",
+                        disp + "|" + cat, v)
+            log.info("[zsr_cats@%s] chunk %s..%s: %d rows",
+                     platform, c1, c2, len(rows))
+    return [(m, "monthly", p, dn, dv, v)
+            for (m, p, dn, dv), v in agg.items()]
+
+
+def pull_hydra_ctr(wh, d1, d2):
+    """Monthly CTR inputs: result-page views (Search vs Navigation) and ad
+    clicks with position buckets. Metrics (all counts, additive):
+       search_ctr_serps, search_ctr_clicks, search_ctr_clicks_p1/_p3/_p40
+    dims: 'search_mode' (Search/Navigation), 'platform|search_mode'."""
+    template = read_sql("hydra_ctr_monthly.sql")
+    agg = {}
+
+    def add(metric, period, dim_name, dim_value, v):
+        key = (metric, period, dim_name, dim_value)
+        agg[key] = agg.get(key, 0) + v
+
+    for platform in HYDRA_PLATFORMS:
+        disp = HYDRA_PLATFORM_DISPLAY[platform]
+        for c1, c2 in month_chunks(d1, d2):
+            sql = template.format(table=platform, d1=c1, d2=c2,
+                                  listing_predicate=HYDRA_LISTING[platform],
+                                  bot_filter=BOT_FILTER)
+            cols, rows = wh.query(sql, None)
+            for r in dictrows(cols, rows):
+                month = month_key(date.fromisoformat(str(r["month"])[:10]))
+                mode = r["mode"]
+                if r["row_kind"] == "serps":
+                    values = (("search_ctr_serps", float(r["n"])),)
+                else:
+                    values = (("search_ctr_clicks", float(r["n"])),
+                              ("search_ctr_clicks_p1", float(r["p1"])),
+                              ("search_ctr_clicks_p3", float(r["p3"])),
+                              ("search_ctr_clicks_p40", float(r["p40"])))
+                for metric, v in values:
+                    add(metric, month, "search_mode", mode, v)
+                    add(metric, month, "platform|search_mode",
+                        disp + "|" + mode, v)
+            log.info("[ctr@%s] chunk %s..%s: %d rows",
+                     platform, c1, c2, len(rows))
+    return [(m, "monthly", p, dn, dv, v)
+            for (m, p, dn, dv), v in agg.items()]
+
+
 def pull_hydra_keywords(wh, d1, d2):
     """Top keywords per platform, ranked separately for filtered and bare
     searches — each slice carries its own zsr/low/avg figures."""
@@ -575,6 +656,8 @@ def main():
                 rows = pull_hydra_regions(wh, hydra_start, yesterday,
                                           daily_from=daily_start)
                 rows += pull_hydra_filters(wh, hydra_start, yesterday)
+                rows += pull_hydra_zsr_categories(wh, hydra_start, yesterday)
+                rows += pull_hydra_ctr(wh, hydra_start, yesterday)
                 kw_rows = pull_hydra_keywords(wh, kw_d1, kw_d2)
                 metric_rows += rows
                 latest = max((r[2] for r in rows), default=None)
