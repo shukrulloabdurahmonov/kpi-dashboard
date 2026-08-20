@@ -41,7 +41,8 @@ KPI_TABS = [
 TABS = KPI_TABS  # legacy alias; hand routes below still reference it
 
 SEARCH_TABS = [
-    ("search", "/search", "Search"),
+    ("search", "/search", "Search volume"),
+    ("search_users_tab", "/search/users", "Search users"),
     ("search_zsr", "/search/zsr", "Zero results"),
     ("search_ctr", "/search/ctr", "CTR"),
     ("search_keywords", "/search/keywords", "Keywords"),
@@ -1068,27 +1069,100 @@ def _with_pf(chart, mode, pdata, approx=False):
     return chart
 
 
+def _section(title):
+    return {"kind": "section", "title": title}
+
+
 def build_search():
+    """Search volume tab: everything measured in search EVENTS."""
     g = "weekly"   # each chart carries its own D/W/M toggle; cards are pinned
+    methods = ["Keyword", "Browsing"]
     cards = [
-        _s_card("Search users / day", data.series_at("search_users", g), g,
-                info_key="search_users"),
+        _s_card("Searches / day (events)", data.daily("search_searches"),
+                "daily", info_key="search_searches"),
         _s_card("Searches per search user",
                 data.ratio_at("search_volume", "search_users", g, as_pct=False),
                 g, info_key="search_volume"),
+        _s_card("Searches / day (avg, weekly)",
+                data.series_at("search_volume", g), g,
+                info_key="search_volume"),
+    ]
+
+    def vol_variant(gg):
+        pts = data.series_at("search_volume", gg)
+        return ({"grain": gg,
+                 "series": [{"label": "Searches", "points": pts}],
+                 "pfdata": _pp("search_volume", gg)} if pts else None)
+
+    def mstack_variant(gg):
+        series = _nz([{"label": m,
+                       "points": data.series_at("search_volume", gg,
+                                                "method", m)}
+                      for m in methods])
+        return ({"grain": gg, "series": series,
+                 "pfdata": {m: _pp("search_volume", gg, method=m)
+                            for m in methods}} if series else None)
+
+    def kwb_variant(gg):
+        series = _nz([{"label": m,
+                       "points": data.series_at("search_searches", gg,
+                                                "method", m)}
+                      for m in methods])
+        return ({"grain": gg, "series": series,
+                 "title": "Keyword vs browsing searches (%s event totals)"
+                          % GRAIN_WORD[gg],
+                 "pfdata": {m: _pp("search_searches", gg, method=m)
+                            for m in methods}} if series else None)
+
+    charts = [
+        _section("Volume trends"),
+        _with_grains(_with_pf(
+            _s_line("Search volume (avg daily)",
+                    [{"label": "Searches",
+                      "points": data.series_at("search_volume", g)}],
+                    g, area=True, note=AVG_DAILY_NOTE, info_key="search_volume"),
+            "sum", _pp("search_volume", g)), vol_variant),
+        _search_totals_table(),
+        _section("Method mix — keyword vs browsing"),
+        _with_grains(_with_pf(_method_volume_stacked(g, methods),
+                              "sum_series",
+                              {m: _pp("search_volume", g, method=m)
+                               for m in methods}), mstack_variant),
+        _with_grains(_with_pf(
+            _s_line("Keyword vs browsing searches (daily event totals)",
+                    kwb_variant("daily")["series"],
+                    "daily", note="True event totals.",
+                    info_key="search_searches"),
+            "sum_series",
+            {m: _pp("search_searches", "daily", method=m) for m in methods}),
+            kwb_variant, grains=("daily", "monthly"), default="daily"),
+        _section("How searches are narrowed"),
+        _filter_depth_stacked(),
+        _filter_type_bars(),
+        _filter_depth_results_bars(),
+        _section("Categories"),
+        _search_treemap(),
+        _search_cat_matrix(),
+        _section("Regions"),
+        _search_region_map(),
+    ]
+    return {"cards": cards, "charts": charts}
+
+
+def build_search_users():
+    """Search users tab: everything measured in PEOPLE (avg daily users)."""
+    g = "weekly"
+    methods = ["Keyword", "Browsing"]
+    cards = [
+        _s_card("Search users / day", data.series_at("search_users", g), g,
+                info_key="search_users"),
         _s_card("Search → ad view", data.series_at("search_ssu_adview", g), g,
                 fmt="pct", info_key="search_ssu_adview"),
         _s_card("Search → reply", data.series_at("search_ssu_lead", g), g,
                 fmt="pct", info_key="search_ssu_lead"),
-        _s_card("Searches / day (events)", data.daily("search_searches"),
-                "daily", info_key="search_searches"),
     ]
 
     platforms = data.dim_values("search_users", "platform", top_n=4)
-    methods = ["Keyword", "Browsing"]
-
-    def section(title):
-        return {"kind": "section", "title": title}
 
     def mekko_variant(gg):
         cols = _mekko_cols(gg)
@@ -1122,21 +1196,6 @@ def build_search():
         return ({"grain": gg, "series": ch["series"],
                  "pfdata": _pp("search_users", gg)} if ch else None)
 
-    def vol_variant(gg):
-        pts = data.series_at("search_volume", gg)
-        return ({"grain": gg,
-                 "series": [{"label": "Searches", "points": pts}],
-                 "pfdata": _pp("search_volume", gg)} if pts else None)
-
-    def mstack_variant(gg):
-        series = _nz([{"label": m,
-                       "points": data.series_at("search_volume", gg,
-                                                "method", m)}
-                      for m in methods])
-        return ({"grain": gg, "series": series,
-                 "pfdata": {m: _pp("search_volume", gg, method=m)
-                            for m in methods}} if series else None)
-
     def mshare_variant(gg):
         series = _nz([{"label": m,
                        "points": data.series_at("search_share_on_platform",
@@ -1146,20 +1205,9 @@ def build_search():
                  "pfdata": {m: _pp("search_share_on_platform", gg, method=m)
                             for m in methods}} if series else None)
 
-    def kwb_variant(gg):
-        series = _nz([{"label": m,
-                       "points": data.series_at("search_searches", gg,
-                                                "method", m)}
-                      for m in methods])
-        return ({"grain": gg, "series": series,
-                 "title": "Keyword vs browsing searches (%s event totals)"
-                          % GRAIN_WORD[gg],
-                 "pfdata": {m: _pp("search_searches", gg, method=m)
-                            for m in methods}} if series else None)
-
     users_pp = _pp("search_users", g)
     charts = [
-        section("Funnel"),
+        _section("Funnel"),
         _with_grains(_search_funnel_marimekko(g), mekko_variant),
         _with_grains(_with_pf(
             _s_line("Funnel conversion trend (avg of daily ratios)",
@@ -1167,7 +1215,7 @@ def build_search():
                     g, pct=True, info_key="search_ssu_adview",
                     note="Unweighted average of daily ratios."),
             "lines", conv_variant(g)["pfdata"]), conv_variant),
-        section("Trends & platforms"),
+        _section("Platforms"),
         _with_grains(_with_pf(
             _s_line("Search users by platform (avg daily)",
                     users_variant(g)["series"],
@@ -1175,18 +1223,7 @@ def build_search():
             "lines", {"": users_pp}), users_variant),
         _with_grains(_with_pf(_platform_share_area(g), "mix", users_pp),
                      mix_variant),
-        _with_grains(_with_pf(
-            _s_line("Search volume (avg daily)",
-                    [{"label": "Searches",
-                      "points": data.series_at("search_volume", g)}],
-                    g, area=True, note=AVG_DAILY_NOTE, info_key="search_volume"),
-            "sum", _pp("search_volume", g)), vol_variant),
-        _search_totals_table(),
-        section("Method mix — keyword vs browsing"),
-        _with_grains(_with_pf(_method_volume_stacked(g, methods),
-                              "sum_series",
-                              {m: _pp("search_volume", g, method=m)
-                               for m in methods}), mstack_variant),
+        _section("Method mix"),
         _with_grains(_with_pf(
             _s_line("Method share of platform searchers (avg of daily shares)",
                     mshare_variant(g)["series"],
@@ -1194,23 +1231,6 @@ def build_search():
                     note="Users can use both methods in a day, so shares can "
                          "sum past 100%."),
             "lines", mshare_variant(g)["pfdata"]), mshare_variant),
-        _with_grains(_with_pf(
-            _s_line("Keyword vs browsing searches (daily event totals)",
-                    kwb_variant("daily")["series"],
-                    "daily", note="True event totals.",
-                    info_key="search_searches"),
-            "sum_series",
-            {m: _pp("search_searches", "daily", method=m) for m in methods}),
-            kwb_variant, grains=("daily", "monthly"), default="daily"),
-        section("How searches are narrowed"),
-        _filter_depth_stacked(),
-        _filter_type_bars(),
-        _filter_depth_results_bars(),
-        section("Categories"),
-        _search_treemap(),
-        _search_cat_matrix(),
-        section("Regions"),
-        _search_region_map(),
     ]
     return {"cards": cards, "charts": charts}
 
@@ -1488,6 +1508,7 @@ BUILDERS = {
     "monetization": build_monetization,
     "users": build_users,
     "search": build_search,
+    "search_users_tab": build_search_users,
     "search_zsr": build_search_zsr,
     "search_ctr": build_search_ctr,
     "search_keywords": build_search_keywords,
