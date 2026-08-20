@@ -1091,6 +1091,47 @@
 
   /* ---- sortable keywords table (DOM kind) ---------------------------------- */
 
+  /* ---- plain totals table (DOM kind) -------------------------------------- */
+
+  function buildTable(fig, spec) {
+    var holder = fig.querySelector(".chart-holder");
+    var canvas = holder.querySelector("canvas");
+    if (canvas) canvas.remove();
+    holder.style.height = "auto";
+    var table = document.createElement("table");
+    table.className = "kwtable";
+    var thead = document.createElement("thead");
+    var hr = document.createElement("tr");
+    spec.columns.forEach(function (col) {
+      var th = document.createElement("th");
+      th.textContent = col.label;
+      th.style.cursor = "default";
+      if (col.num) th.classList.add("num");
+      hr.appendChild(th);
+    });
+    thead.appendChild(hr);
+    table.appendChild(thead);
+    var tbody = document.createElement("tbody");
+    spec.rows.forEach(function (r) {
+      var tr = document.createElement("tr");
+      spec.columns.forEach(function (col, i) {
+        var td = document.createElement("td");
+        if (r[i] === null || r[i] === undefined) {
+          td.textContent = "–";
+        } else if (col.num) {
+          td.classList.add("num");
+          td.textContent = Math.round(+r[i]).toLocaleString();
+        } else {
+          td.textContent = r[i];
+        }
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    holder.appendChild(table);
+  }
+
   var KW_PAGE = 25;
 
   function buildKwTable(fig, spec) {
@@ -1235,6 +1276,7 @@
     if (spec.kind === "marimekko") { buildMarimekko(fig, spec); return; }
     if (spec.kind === "treemap") { buildTreemap(fig, spec); return; }
     if (spec.kind === "kwtable") { buildKwTable(fig, spec); return; }
+    if (spec.kind === "table") { buildTable(fig, spec); return; }
     var holder = fig.querySelector(".chart-holder");
     if ((spec.kind === "barh" || spec.kind === "divergingbarh") && spec.rows.length > 8) {
       holder.style.height = (spec.rows.length * 28 + 60) + "px";

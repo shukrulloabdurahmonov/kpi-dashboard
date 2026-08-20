@@ -751,7 +751,7 @@ def _search_funnel_marimekko(grain, periods=5):
             + AVG_DAILY_NOTE + " All platforms and methods."
             + (" Search data extracted %s." % extracted if extracted else ""))
     return {"kind": "marimekko",
-            "title": "Search funnel by %s — last %d %ss"
+            "title": "Search funnel by %s (avg daily users) — last %d %ss"
                      % (word, len(cols), word),
             "cols": cols, "note": note, "info": info("search_users"),
             "pfilter": {"mode": "mekko", "platforms": list(pdata),
@@ -961,7 +961,7 @@ def _platform_share_area(wk):
     if not series:
         return None
     series.sort(key=lambda s: -s.pop("_last"))  # largest = bottom layer
-    return {"kind": "sharearea", "title": "Platform mix of search users",
+    return {"kind": "sharearea", "title": "Platform mix of search users (avg daily)",
             "grain": wk, "series": series, "pct": True,
             "note": "Share of the sum of platform search users per %s; a "
                     "user active on two platforms counts in both."
@@ -975,11 +975,51 @@ def _method_volume_stacked(grain, methods, plat=""):
     series = [s for s in series if s["points"]]
     if not series:
         return None
-    return {"kind": "stacked", "title": "Search volume by method", "unit": None,
+    return {"kind": "stacked", "title": "Search volume by method (avg daily)", "unit": None,
             "grain": grain,
             "note": "Avg daily searches; methods are additive (each search "
                     "has exactly one method)." + (" %s only." % plat if plat else ""),
             "series": series, "info": info("search_volume")}
+
+
+def _search_totals_table(months=13):
+    """TRUE monthly search-event totals (additive), the counterpart to the
+    avg-daily charts above it."""
+    totals = data.monthly("search_searches")[-months:]
+    if not totals:
+        return None
+    per_plat = {p: dict(data.monthly("search_searches", "platform", p))
+                for p in SEARCH_PLATFORMS}
+    rows = [[m, v] + [per_plat[p].get(m) for p in SEARCH_PLATFORMS]
+            for m, v in reversed(totals)]
+    return {"kind": "table", "title": "Search totals by month (event counts)",
+            "wide": True,
+            "columns": [{"label": "Month"}, {"label": "All searches", "num": True}]
+                       + [{"label": p, "num": True} for p in SEARCH_PLATFORMS],
+            "rows": rows,
+            "note": "True totals of search events — unlike the avg-daily "
+                    "charts, these grow with the period. Current partial "
+                    "month excluded.",
+            "info": info("search_searches")}
+
+
+def _serp_totals_table(months=13):
+    serp = data.monthly("search_serp")[-months:]
+    if not serp:
+        return None
+    zsr = dict(data.monthly("search_zsr"))
+    low = dict(data.monthly("search_zsr_low"))
+    rows = [[m, v, zsr.get(m), low.get(m)] for m, v in reversed(serp)]
+    return {"kind": "table",
+            "title": "Keyword SERP totals by month (clickstream event counts)",
+            "columns": [{"label": "Month"},
+                        {"label": "SERP views", "num": True},
+                        {"label": "Zero results", "num": True},
+                        {"label": "Low supply (1–10)", "num": True}],
+            "rows": rows,
+            "note": "True totals across all platforms. Counts are additive; "
+                    "only RATES must never be blended across platforms.",
+            "info": info("search_serp")}
 
 
 def _with_pf(chart, mode, pdata, approx=False):
@@ -1031,7 +1071,7 @@ def build_search():
         section("Funnel"),
         _search_funnel_marimekko(g),
         _with_pf(
-            _s_line("Funnel conversion trend",
+            _s_line("Funnel conversion trend (avg of daily ratios)",
                     [{"label": "Search → ad view",
                       "points": data.series_at("search_ssu_adview", g)},
                      {"label": "Search → reply",
@@ -1042,24 +1082,25 @@ def build_search():
                       "Search → reply": _pp("search_ssu_lead", g)}),
         section("Trends & platforms"),
         _with_pf(
-            _s_line("Search users by platform",
+            _s_line("Search users by platform (avg daily)",
                     [{"label": p, "points": users_pp[p]}
                      for p in platforms if p in users_pp],
                     g, note=AVG_DAILY_NOTE, info_key="search_users"),
             "lines", {"": users_pp}),
         _with_pf(_platform_share_area(g), "mix", users_pp),
         _with_pf(
-            _s_line("Search volume",
+            _s_line("Search volume (avg daily)",
                     [{"label": "Searches",
                       "points": data.series_at("search_volume", g)}],
                     g, area=True, note=AVG_DAILY_NOTE, info_key="search_volume"),
             "sum", _pp("search_volume", g)),
+        _search_totals_table(),
         section("Method mix — keyword vs browsing"),
         _with_pf(_method_volume_stacked(g, methods),
                  "sum_series",
                  {m: _pp("search_volume", g, method=m) for m in methods}),
         _with_pf(
-            _s_line("Method share of platform searchers",
+            _s_line("Method share of platform searchers (avg of daily shares)",
                     [{"label": m,
                       "points": data.series_at("search_share_on_platform", g,
                                                "method", m)}
@@ -1097,6 +1138,7 @@ def build_search():
                 "daily", pct=True, info_key="search_zsr",
                 note="Share of Android keyword searches returning zero / 1–10 "
                      "results. " + ZSR_PLATFORM_NOTE),
+        _serp_totals_table(),
     ]
     return {"cards": cards, "charts": charts,
             "controls": _search_controls(g)}
