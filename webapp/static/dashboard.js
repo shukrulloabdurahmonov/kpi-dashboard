@@ -579,7 +579,17 @@
         interaction: { mode: "index", intersect: false },
         plugins: {
           legend: { display: true, labels: { color: pal.ink2, boxWidth: 12, boxHeight: 12 } },
-          tooltip: tooltipOpts(pal, true)
+          tooltip: (function () {
+            // the "58% → 45%" first→last annotation belongs in the legend;
+            // in tooltips it reads as noise next to the hovered week's value
+            var t = tooltipOpts(pal, true);
+            t.callbacks = t.callbacks || {};
+            t.callbacks.label = function (item) {
+              var name = item.dataset.label.replace(/\s+\d+% → \d+%$/, "");
+              return " " + name + ": " + fmtFull(item.parsed.y, true);
+            };
+            return t;
+          })()
         },
         scales: scales
       }
