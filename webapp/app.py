@@ -42,6 +42,7 @@ TABS = KPI_TABS  # legacy alias; hand routes below still reference it
 
 SEARCH_TABS = [
     ("search", "/search", "Search"),
+    ("search_keywords", "/search/keywords", "Keywords"),
     ("search_methodology", "/search/methodology", "Methodology"),
     ("search_definitions", "/search/definitions", "Definitions"),
 ]
@@ -669,6 +670,59 @@ def _search_funnel_marimekko(weeks=5):
             "cols": cols, "note": note, "info": info("search_users")}
 
 
+FILTER_DEPTHS = ["No filters", "1 filter", "2 filters", "3+ filters"]
+
+
+def _filter_depth_stacked():
+    series = [{"label": d,
+               "points": data.series_at("search_filter_depth", "monthly",
+                                        "filter_depth", d)}
+              for d in FILTER_DEPTHS]
+    series = [s for s in series if s["points"]]
+    if not series:
+        return None
+    return {"kind": "stacked", "title": "Keyword searches by filter depth",
+            "unit": None, "grain": "monthly", "series": series,
+            "note": "Narrowing criteria per search: category, region, price "
+                    "and attribute filters all count. Fixed monthly view.",
+            "info": info("search_filter_depth")}
+
+
+def _filter_type_bars():
+    period = data.latest_full_period("search_filter_use", "monthly", "filter_type")
+    if period is None:
+        return None
+    _, rows = data.breakdown("search_filter_use", "filter_type", period=period)
+    serp = dict(data.series("search_serp", "monthly")).get(period)
+    if not rows or not serp:
+        return None
+    pct_rows = [[name, round(v / serp * 100.0, 1)] for name, v in rows]
+    return {"kind": "barh", "title": "Searches using each filter type — " + period,
+            "unit": "%", "rows": pct_rows,
+            "note": "Share of keyword searches. Overlapping — one search can "
+                    "use several criteria, so shares can sum past 100%.",
+            "info": info("search_filter_use")}
+
+
+def _filter_depth_results_bars():
+    period = data.latest_full_period("search_filter_avg_results", "monthly",
+                                     "filter_depth")
+    if period is None:
+        return None
+    vals = dict(data.breakdown("search_filter_avg_results", "filter_depth",
+                               period=period)[1])
+    rows = [[d, vals[d]] for d in FILTER_DEPTHS if d in vals]
+    if not rows:
+        return None
+    return {"kind": "barh",
+            "title": "Avg results (≤1000) by filter depth — " + period,
+            "rows": rows,
+            "note": "Each narrowing criterion shrinks the result set. The app "
+                    "caps result counts at 1000, so the unfiltered bar is "
+                    "understated the most.",
+            "info": info("search_filter_avg_results")}
+
+
 def _search_treemap():
     period, rows = data.breakdown("search_searches", "search_cat_l1|search_cat",
                                   top_n=60)
@@ -879,6 +933,9 @@ def build_search():
                  for m in methods],
                 "daily", note="True daily event totals.",
                 info_key="search_searches"),
+        _filter_depth_stacked(),
+        _filter_type_bars(),
+        _filter_depth_results_bars(),
         _search_treemap(),
         _search_cat_matrix(),
         _search_region_map(),
@@ -887,9 +944,15 @@ def build_search():
                 [{"label": "Android ZSR", "points": _slice_ratio(
                     "search_zsr", "search_serp", "daily", "platform", "Android")}],
                 "daily", pct=True, note=ZSR_PLATFORM_NOTE, info_key="search_zsr"),
-        _search_kwtable(),
     ]
     return {"cards": cards, "charts": charts}
+
+
+def build_search_keywords():
+    kwtable = _search_kwtable()
+    if kwtable:
+        kwtable["wide"] = True   # sole chart on its tab — span the full grid
+    return {"cards": [], "charts": [kwtable]}
 
 
 BUILDERS = {
@@ -900,6 +963,7 @@ BUILDERS = {
     "monetization": build_monetization,
     "users": build_users,
     "search": build_search,
+    "search_keywords": build_search_keywords,
 }
 
 

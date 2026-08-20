@@ -33,11 +33,14 @@ TRINO_METRICS = [
     "search_searches",        # TRUE daily/monthly totals (event counts)
 ]
 
-# hydra-sourced metrics (true event counts)
+# hydra-sourced metrics (true event counts unless noted)
 HYDRA_METRICS = [
     "search_serp",     # first-page keyword SERP views, bot-filtered
     "search_zsr",      # SERP views with 0 results
     "search_zsr_low",  # SERP views with 1-10 results (low supply)
+    "search_filter_depth",        # searches by number of narrowing criteria
+    "search_filter_avg_results",  # avg result count (capped 1000) per depth
+    "search_filter_use",          # searches using each criterion type (overlapping)
 ]
 
 # ratio/average metrics whose slices must never be summed

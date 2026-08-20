@@ -371,6 +371,59 @@ def pull_hydra_regions(wh, d1, d2, daily_from):
     return [(m, g, p, dn, dv, v) for (m, g, p, dn, dv), v in agg.items()]
 
 
+DEPTH_LABELS = {0: "No filters", 1: "1 filter", 2: "2 filters", 3: "3+ filters"}
+
+# hydra.web names the price-filter columns differently from android/ios
+PRICE_COLS = {
+    "web": ("filters_price_from", "filters_price_to"),
+    "android": ("price_from", "price_to"),
+    "ios": ("price_from", "price_to"),
+}
+
+
+def pull_hydra_filters(wh, d1, d2):
+    """How keyword searches are narrowed, monthly, all platforms summed:
+       search_filter_depth      dim filter_depth  — search counts (additive)
+       search_filter_avg_results dim filter_depth — weighted avg result count
+       search_filter_use        dim filter_type   — searches using each
+                                                    criterion (OVERLAPPING)"""
+    template = read_sql("hydra_filters_monthly.sql")
+    counts, rc_sums, use = {}, {}, {}
+    for platform, predicate in HYDRA_PLATFORMS.items():
+        for c1, c2 in month_chunks(d1, d2):
+            pf, pt = PRICE_COLS[platform]
+            sql = template.format(platform=platform, table=platform,
+                                  serp_predicate=predicate, d1=c1, d2=c2,
+                                  sentinel=SENTINEL, bot_filter=BOT_FILTER,
+                                  price_from=pf, price_to=pt)
+            cols, rows = wh.query(sql, None)
+            for r in dictrows(cols, rows):
+                month = month_key(date.fromisoformat(str(r["month"])[:10]))
+                depth = DEPTH_LABELS[int(r["depth"])]
+                n = float(r["searches"])
+                counts[(month, depth)] = counts.get((month, depth), 0) + n
+                rc_sums[(month, depth)] = (rc_sums.get((month, depth), 0)
+                                           + float(r["avg_results"] or 0) * n)
+                for ftype, col in (("Category", "w_category"),
+                                   ("Region", "w_region"),
+                                   ("Price", "w_price"),
+                                   ("Attribute filters", "w_attr")):
+                    key = (month, ftype)
+                    use[key] = use.get(key, 0) + float(r[col])
+            log.info("[filters@%s] chunk %s..%s: %d rows",
+                     platform, c1, c2, len(rows))
+    out = []
+    for (month, depth), n in counts.items():
+        out.append(("search_filter_depth", "monthly", month,
+                    "filter_depth", depth, n))
+        out.append(("search_filter_avg_results", "monthly", month,
+                    "filter_depth", depth, round(rc_sums[(month, depth)] / n, 1)))
+    for (month, ftype), n in use.items():
+        out.append(("search_filter_use", "monthly", month,
+                    "filter_type", ftype, n))
+    return out
+
+
 def pull_hydra_keywords(wh, d1, d2):
     template = read_sql("hydra_keywords.sql")
     out = []
@@ -498,6 +551,7 @@ def main():
                 kw_d1 = (today - timedelta(days=KEYWORD_WINDOW_DAYS)).isoformat()
                 rows = pull_hydra_regions(wh, hydra_start, yesterday,
                                           daily_from=daily_start)
+                rows += pull_hydra_filters(wh, hydra_start, yesterday)
                 kw_rows = pull_hydra_keywords(wh, kw_d1, kw_d2)
                 metric_rows += rows
                 latest = max((r[2] for r in rows), default=None)

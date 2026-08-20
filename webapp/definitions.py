@@ -515,6 +515,39 @@ METRIC_DEFS.update({
         "dims": "platform, region",
         "caveats": "Same platform caveat as zero-result views.",
     },
+    "search_filter_depth": {
+        "label": "Searches by filter depth",
+        "definition": "Keyword searches grouped by how many narrowing criteria "
+                      "were applied — category selection, region, price band, "
+                      "and attribute filters (rooms, year, condition, ...) all count.",
+        "formula": "COUNT(*) by LEAST(filters_count, 3) over first-page keyword SERPs",
+        "source": "hydra.web / hydra.android / hydra.ios (yamato)",
+        "grain": "monthly",
+        "dims": "filter depth (0 / 1 / 2 / 3+)",
+        "caveats": "Counts are additive across platforms and depths.",
+    },
+    "search_filter_avg_results": {
+        "label": "Avg results by filter depth",
+        "definition": "Average reported result count of keyword searches at each "
+                      "filter depth — shows how narrowing shrinks the result set.",
+        "formula": "Search-weighted AVG(result_count) per depth bucket",
+        "source": "hydra.web / hydra.android / hydra.ios (yamato)",
+        "grain": "monthly",
+        "dims": "filter depth (0 / 1 / 2 / 3+)",
+        "caveats": "result_count is capped at 1000 by the app, so unfiltered "
+                   "broad searches are understated the most.",
+    },
+    "search_filter_use": {
+        "label": "Filter-type usage",
+        "definition": "Keyword searches using each narrowing criterion: category "
+                      "selection, region, price band, attribute filters.",
+        "formula": "SUM(criterion present) over first-page keyword SERPs",
+        "source": "hydra.web / hydra.android / hydra.ios (yamato)",
+        "grain": "monthly",
+        "dims": "filter type",
+        "caveats": "OVERLAPPING — one search can use several criteria, so type "
+                   "shares can sum past 100%.",
+    },
     "search_keywords_table": {
         "label": "Top search keywords",
         "definition": "Most-searched keywords over the last 28 days with their "
