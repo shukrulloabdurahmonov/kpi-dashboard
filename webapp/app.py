@@ -985,25 +985,30 @@ def _method_volume_stacked(grain, methods, plat=""):
             "series": series, "info": info("search_volume")}
 
 
-def _search_totals_table(months=13):
-    """TRUE monthly search-event totals (additive), the counterpart to the
-    avg-daily charts above it."""
-    totals = data.monthly("search_searches")[-months:]
-    if not totals:
+def _search_totals_chart():
+    """TRUE search-event totals stacked by platform (additive), the
+    counterpart to the avg-daily charts — with a D/M grain toggle."""
+    def variant(gg):
+        series = _nz([{"label": p,
+                       "points": data.series_at("search_searches", gg,
+                                                "platform", p)}
+                      for p in SEARCH_PLATFORMS])
+        return ({"grain": gg, "series": series,
+                 "title": "Search totals by %s (event counts)"
+                          % GRAIN_WORD[gg]} if series else None)
+
+    base = variant("monthly")
+    if base is None:
         return None
-    per_plat = {p: dict(data.monthly("search_searches", "platform", p))
-                for p in SEARCH_PLATFORMS}
-    rows = [[m, v] + [per_plat[p].get(m) for p in SEARCH_PLATFORMS]
-            for m, v in reversed(totals)]
-    return {"kind": "table", "title": "Search totals by month (event counts)",
-            "wide": True,
-            "columns": [{"label": "Month"}, {"label": "All searches", "num": True}]
-                       + [{"label": p, "num": True} for p in SEARCH_PLATFORMS],
-            "rows": rows,
-            "note": "True totals of search events — unlike the avg-daily "
-                    "charts, these grow with the period. Current partial "
-                    "month excluded.",
-            "info": info("search_searches")}
+    chart = {"kind": "stacked", "title": base["title"], "unit": None,
+             "grain": "monthly", "series": base["series"],
+             "note": "True totals of search events by platform — unlike the "
+                     "avg-daily charts, these grow with the period. Platforms "
+                     "stack exactly (each event has one platform). Current "
+                     "partial period excluded.",
+             "info": info("search_searches")}
+    return _with_grains(chart, variant, grains=("daily", "monthly"),
+                        default="monthly")
 
 
 def _serp_totals_table(months=13):
@@ -1122,7 +1127,7 @@ def build_search():
                       "points": data.series_at("search_volume", g)}],
                     g, area=True, note=AVG_DAILY_NOTE, info_key="search_volume"),
             "sum", _pp("search_volume", g)), vol_variant),
-        _search_totals_table(),
+        _search_totals_chart(),
         _section("Method mix — keyword vs browsing"),
         _with_grains(_with_pf(_method_volume_stacked(g, methods),
                               "sum_series",
