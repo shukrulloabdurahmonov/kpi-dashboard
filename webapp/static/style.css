@@ -826,3 +826,6 @@ body.has-fullscreen { overflow: hidden; }
   font-size: 12px;
   line-height: 1.45;
 }
+
+/* Trino-rollup-sourced charts: thin green border = validated production source */
+.chart-card.trusted { border: 1px solid var(--fresh-green); }

@@ -1064,6 +1064,14 @@ def _with_grains(chart, variant_fn, grains=GRAINS_DWM, default="weekly"):
     return chart
 
 
+def _trusted(chart):
+    """Mark a chart as sourced from the Trino search rollups (the validated
+    production tables) — rendered with a thin green border."""
+    if chart is not None:
+        chart["trusted"] = True
+    return chart
+
+
 def _with_pf(chart, mode, pdata, approx=False):
     """Attach a client-side platform filter payload to a chart spec."""
     if chart is None or not pdata:
@@ -1128,33 +1136,33 @@ def build_search():
 
     charts = [
         _section("Volume trends"),
-        _with_grains(_with_pf(
+        _trusted(_with_grains(_with_pf(
             _s_line("Search volume (avg daily)",
                     [{"label": "Searches",
                       "points": data.series_at("search_volume", g)}],
                     g, area=True, note=AVG_DAILY_NOTE, info_key="search_volume"),
-            "sum", _pp("search_volume", g)), vol_variant),
-        _search_totals_chart(),
+            "sum", _pp("search_volume", g)), vol_variant)),
+        _trusted(_search_totals_chart()),
         _section("Method mix — keyword vs browsing"),
-        _with_grains(_with_pf(_method_volume_stacked(g, methods),
+        _trusted(_with_grains(_with_pf(_method_volume_stacked(g, methods),
                               "sum_series",
                               {m: _pp("search_volume", g, method=m)
-                               for m in methods}), mstack_variant),
-        _with_grains(_with_pf(
+                               for m in methods}), mstack_variant)),
+        _trusted(_with_grains(_with_pf(
             _s_line("Keyword vs browsing searches (daily event totals)",
                     kwb_variant("daily")["series"],
                     "daily", note="True event totals.",
                     info_key="search_searches"),
             "sum_series",
             {m: _pp("search_searches", "daily", method=m) for m in methods}),
-            kwb_variant, grains=("daily", "monthly"), default="daily"),
+            kwb_variant, grains=("daily", "monthly"), default="daily")),
         _section("How searches are narrowed"),
         _filter_depth_stacked(),
         _filter_type_bars(),
         _filter_depth_results_bars(),
         _section("Categories"),
-        _search_treemap(),
-        _search_cat_matrix(),
+        _trusted(_search_treemap()),
+        _trusted(_search_cat_matrix()),
         _section("Regions"),
         _search_region_map(),
     ]
@@ -1220,29 +1228,29 @@ def build_search_users():
     users_pp = _pp("search_users", g)
     charts = [
         _section("Funnel"),
-        _with_grains(_search_funnel_marimekko(g), mekko_variant),
-        _with_grains(_with_pf(
+        _trusted(_with_grains(_search_funnel_marimekko(g), mekko_variant)),
+        _trusted(_with_grains(_with_pf(
             _s_line("Funnel conversion trend (avg of daily ratios)",
                     conv_variant(g)["series"],
                     g, pct=True, info_key="search_ssu_adview",
                     note="Unweighted average of daily ratios."),
-            "lines", conv_variant(g)["pfdata"]), conv_variant),
+            "lines", conv_variant(g)["pfdata"]), conv_variant)),
         _section("Platforms"),
-        _with_grains(_with_pf(
+        _trusted(_with_grains(_with_pf(
             _s_line("Search users by platform (avg daily)",
                     users_variant(g)["series"],
                     g, note=AVG_DAILY_NOTE, info_key="search_users"),
-            "lines", {"": users_pp}), users_variant),
-        _with_grains(_with_pf(_platform_share_area(g), "mix", users_pp),
-                     mix_variant),
+            "lines", {"": users_pp}), users_variant)),
+        _trusted(_with_grains(_with_pf(_platform_share_area(g), "mix", users_pp),
+                     mix_variant)),
         _section("Method mix"),
-        _with_grains(_with_pf(
+        _trusted(_with_grains(_with_pf(
             _s_line("Method share of platform searchers (avg of daily shares)",
                     mshare_variant(g)["series"],
                     g, pct=True, info_key="search_share_on_platform",
                     note="Users can use both methods in a day, so shares can "
                          "sum past 100%."),
-            "lines", mshare_variant(g)["pfdata"]), mshare_variant),
+            "lines", mshare_variant(g)["pfdata"]), mshare_variant)),
     ]
     return {"cards": cards, "charts": charts}
 

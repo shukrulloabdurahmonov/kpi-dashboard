@@ -127,7 +127,7 @@ window.CATEGORY_TREE = {{ category_tree | tojson }};
   {% if chart.kind == 'section' %}
   <h2 class="charts-section">{{ chart.title }}</h2>
   {% else %}
-  <figure class="chart-card{{ ' wide' if chart.wide }}" data-chart='{{ chart | tojson }}'>
+  <figure class="chart-card{{ ' wide' if chart.wide }}{{ ' trusted' if chart.trusted }}"{% if chart.trusted %} title="Source: Trino search rollups — the validated production tables"{% endif %} data-chart='{{ chart | tojson }}'>
     <figcaption>{{ chart.title }}{% if chart.unit %} <span class="unit">({{ chart.unit }})</span>{% endif %}
       {% if chart.info %}<button class="info-btn" type="button" data-info="{{ chart.info }}">i</button>{% endif %}
       <button class="fs-btn" type="button" title="Fullscreen">⤢</button>
