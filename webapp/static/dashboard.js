@@ -548,6 +548,44 @@
     }));
   }
 
+  function buildShareArea(canvas, spec) {
+    // 100%-stacked area: each period's series values are pre-normalized
+    // shares (sum to 100). Largest series first = bottom layer.
+    var pal = palette();
+    var periods = alignSeries(spec.series);
+    var datasets = spec.series.map(function (s, i) {
+      var byP = {};
+      s.points.forEach(function (p) { byP[p[0]] = p[1]; });
+      return {
+        label: s.label,
+        data: periods.map(function (p) { return (p in byP) ? byP[p] : 0; }),
+        backgroundColor: pal.series[i % 4],
+        borderColor: pal.series[i % 4],
+        borderWidth: 1,
+        pointRadius: 0,
+        fill: true,
+        tension: 0.25
+      };
+    });
+    var scales = baseScales(pal, true);
+    scales.y.stacked = true;
+    scales.y.max = 100;
+    charts.push(new Chart(canvas, {
+      type: "line",
+      data: { labels: periods.map(function (p) { return periodLabel(p, spec.grain); }),
+              datasets: datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: { display: true, labels: { color: pal.ink2, boxWidth: 12, boxHeight: 12 } },
+          tooltip: tooltipOpts(pal, true)
+        },
+        scales: scales
+      }
+    }));
+  }
+
   function buildBarh(canvas, spec) {
     var pal = palette();
     charts.push(new Chart(canvas, {
@@ -845,49 +883,70 @@
 
   /* ---- render ------------------------------------------------------------ */
 
-  /* ---- search funnel (DOM kind) ------------------------------------------ */
+  /* ---- search funnel marimekko (DOM kind) ---------------------------------- */
 
-  function buildFunnel(fig, spec) {
-    // horizontal stage bars scaled to the first stage, with step conversion
-    // printed between stages. spec.stages = [[label, value, shareOfFirst]].
+  function buildMarimekko(fig, spec) {
+    // week columns: width = that week's search users, stacked segments =
+    // exclusive engagement split. spec.cols = [{label, total, segs:[[l,v]]}].
     var holder = fig.querySelector(".chart-holder");
     var canvas = holder.querySelector("canvas");
     if (canvas) canvas.remove();
     var pal = palette();
+    // deepest engagement at the bottom: reply green, adview orange, rest blue
+    var segColor = { "Searched only": pal.series[0], "Ad view only": pal.series[1],
+                     "Sent a reply": pal.series[2] };
+    var grand = spec.cols.reduce(function (s, c) { return s + c.total; }, 0);
     var wrap = document.createElement("div");
-    wrap.className = "funnel";
-    spec.stages.forEach(function (st, i) {
-      if (i > 0) {
-        var prev = spec.stages[i - 1][1];
-        var step = document.createElement("div");
-        step.className = "funnel-step";
-        step.textContent = "↓ " + (prev ? (st[1] / prev * 100).toFixed(1) : "–") + "%";
-        wrap.appendChild(step);
-      }
-      var row = document.createElement("div");
-      row.className = "funnel-row";
+    wrap.className = "mekko";
+    spec.cols.forEach(function (c) {
+      var col = document.createElement("div");
+      col.className = "mekko-col";
+      col.style.width = (c.total / grand * 100) + "%";
+      var segs = document.createElement("div");
+      segs.className = "mekko-segs";
+      c.segs.forEach(function (sg) {
+        var d = document.createElement("div");
+        d.className = "mekko-seg";
+        var share = c.total ? sg[1] / c.total : 0;
+        d.style.height = (share * 100) + "%";
+        d.style.background = segColor[sg[0]] || pal.series[3];
+        if (share > 0.07) {
+          var s = document.createElement("span");
+          s.textContent = (share * 100).toFixed(1) + "%";
+          d.appendChild(s);
+        }
+        attachTip(d, periodLabel(c.label, "weekly") + " — " + sg[0] + ": "
+                  + fmtCompact(sg[1]) + " (" + (share * 100).toFixed(1)
+                  + "% of " + fmtCompact(c.total) + " search users)");
+        d.tabIndex = 0;
+        segs.appendChild(d);
+      });
+      col.appendChild(segs);
       var lab = document.createElement("div");
-      lab.className = "funnel-label";
-      lab.textContent = st[0];
-      row.appendChild(lab);
-      var track = document.createElement("div");
-      track.className = "funnel-track";
-      var bar = document.createElement("div");
-      bar.className = "funnel-bar";
-      bar.style.width = Math.max(1.5, st[2] * 100) + "%";
-      bar.style.background = pal.series[i % pal.series.length];
-      track.appendChild(bar);
-      row.appendChild(track);
-      var val = document.createElement("div");
-      val.className = "funnel-value";
-      val.textContent = fmtCompact(st[1]) + " (" + (st[2] * 100).toFixed(1) + "%)";
-      row.appendChild(val);
-      attachTip(row, st[0] + ": " + fmtFull(st[1]) + " — "
-                + (st[2] * 100).toFixed(2) + "% of search users");
-      wrap.appendChild(row);
+      lab.className = "mekko-label";
+      lab.textContent = periodLabel(c.label, "weekly");
+      var tot = document.createElement("div");
+      tot.className = "mekko-total";
+      tot.textContent = fmtCompact(c.total);
+      lab.appendChild(document.createElement("br"));
+      lab.appendChild(tot);
+      col.appendChild(lab);
+      wrap.appendChild(col);
     });
     holder.style.height = "auto";
     holder.appendChild(wrap);
+    var legend = document.createElement("div");
+    legend.className = "tm-legend";
+    ["Sent a reply", "Ad view only", "Searched only"].forEach(function (name) {
+      var chip = document.createElement("span");
+      chip.className = "tm-chip";
+      var sw = document.createElement("i");
+      sw.style.background = segColor[name];
+      chip.appendChild(sw);
+      chip.appendChild(document.createTextNode(name));
+      legend.appendChild(chip);
+    });
+    holder.appendChild(legend);
   }
 
   /* ---- squarified treemap (DOM kind) -------------------------------------- */
@@ -1154,8 +1213,8 @@
         if (canvas) buildMap(fig, spec);
         return;
       }
-      if (spec.kind === "funnel") {
-        if (canvas) buildFunnel(fig, spec);
+      if (spec.kind === "marimekko") {
+        if (canvas) buildMarimekko(fig, spec);
         return;
       }
       if (spec.kind === "treemap") {
@@ -1174,6 +1233,7 @@
       if (spec.kind === "barh") buildBarh(canvas, spec);
       else if (spec.kind === "divergingbarh") buildDivergingBarh(canvas, spec);
       else if (spec.kind === "stacked") buildStacked(canvas, spec);
+      else if (spec.kind === "sharearea") buildShareArea(canvas, spec);
       else buildLine(canvas, spec);
     });
   }

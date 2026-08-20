@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="method">
+<h2 class="dict-title">Methodology</h2>
+<p class="dict-intro">
+  How the Search dashboard's numbers are built: two independent sources with
+  <strong>two different definitions of a “search”</strong> — never compare
+  volumes between them.
+</p>
+
+<section>
+  <h3>Source 1 — Search KPI rollups (Trino)</h3>
+  <p>
+    The funnel, trend, and category sections come from the search team's
+    rollup tables
+    <code>glue.odyn_search_and_ad_ranking.daily_search_users_kpis</code> /
+    <code>daily_search_volume_kpis</code> / <code>daily_user_searches</code>
+    on Trino (<code>presto.data.olx.org</code>), the same sources behind the
+    production multi-country Tableau board. History starts
+    <strong>2024-12-30</strong> (ISO week 1 of 2025).
+  </p>
+  <ul>
+    <li><strong>Avg-daily semantics.</strong> Weekly and monthly
+      <em>users_*</em> / <em>volume_*</em> values are <em>averages of daily
+      values</em>, never period totals or distinct counts over the period. A
+      weekly point of 372K search users means “on an average day of that
+      week, 372K users searched”.</li>
+    <li><strong>Funnel.</strong> Search users → same-day ad viewers →
+      same-day repliers. Conversion percentages
+      (<em>search&nbsp;→&nbsp;ad&nbsp;view</em>,
+      <em>search&nbsp;→&nbsp;reply</em>) are <em>unweighted averages of the
+      daily ratios</em>, matching the production board.</li>
+    <li><strong>Per-category shares.</strong> The source computes per-category
+      conversion ratios against <em>ALL</em> search users (the same-level
+      “All” denominator), so a category's percentage is its share of all
+      search users — <em>not</em> that category's own conversion rate. The
+      dashboard labels them accordingly.</li>
+    <li><strong>True totals.</strong> The only additive volume metric is
+      <em>searches (event count)</em> from the daily search log, split by
+      platform, keyword-vs-browsing, category usage, and finance category
+      (via the <code>eu_bi</code> category dimension, deepest level
+      coalesced L3&nbsp;→&nbsp;L2&nbsp;→&nbsp;L1).</li>
+    <li><strong>Keyword vs Browsing.</strong> A search with a typed query is
+      “Keyword”; category navigation without a query is “Browsing”. A user
+      can do both in one day, so method shares can sum past 100%.</li>
+    <li><strong>TGV is not tracked for UZ</strong> — all TGV columns in the
+      source are legitimately 0 and are excluded from this dashboard.</li>
+  </ul>
+</section>
+
+<section>
+  <h3>Source 2 — Raw clickstream (hydra on yamato)</h3>
+  <p>
+    The region map, zero-result rates, and the keywords table come from raw
+    hydra clickstream (<code>hydra.web</code> / <code>hydra.android</code> /
+    <code>hydra.ios</code>) on the yamato warehouse. UZ retention starts
+    <strong>2025-07-02</strong>. A “search” here is a <em>first-page keyword
+    SERP view</em>: listing-page events with a non-empty keyword,
+    <code>page_nb&nbsp;=&nbsp;1</code>, a valid result count below the
+    <code>999999</code> app sentinel, filtered through the house-standard
+    17-rule bot/user-agent filter plus the <code>eu_bi</code> IP blacklist.
+  </p>
+  <ul>
+    <li><strong>Zero-result (ZSR)</strong> = 0 results returned;
+      <strong>low-supply</strong> = 1–10 results.</li>
+    <li><strong>Platform asymmetry — the big caveat.</strong> Web and iOS
+      auto-extend empty searches with fallback results, so their hard-zero
+      rates are near 0 (~0.001%). Android reports true zeros (~15–22%).
+      <em>Rates are therefore never blended across platforms</em>; the
+      dashboard shows ZSR for Android only.</li>
+    <li><strong>Regions</strong> come from the event's <code>region_id</code>,
+      mapped to the same region names the rest of the app uses (via
+      <code>livesync.cee_olxuz_regions</code>). SERP view counts are additive,
+      so the map sums all platforms.</li>
+    <li><strong>Keywords table</strong>: top 500 keywords per platform by
+      28-day search volume (minimum 30 searches),
+      <code>LOWER(BTRIM(keyword))</code>-normalized, with ZSR %, low-supply %
+      and average result count. ZSR % is only meaningful on Android.</li>
+  </ul>
+</section>
+
+<section>
+  <h3>Refresh &amp; retention</h3>
+  <ul>
+    <li>Extraction runs on a scheduled machine with warehouse + Trino access
+      each morning (~08:30 Tashkent): full Trino history plus the current and
+      previous month of clickstream. The result ships as a data payload that
+      this server merges into its store with its nightly rebuild.</li>
+    <li>Weekly and monthly search history is kept in full; daily series keep
+      90 days; the keywords table always holds one 28-day window.</li>
+    <li>If a morning extraction is missed, only this dashboard ages — the
+      main KPI dashboard refreshes independently.</li>
+    <li>Last successful extraction (UTC):
+      Trino rollups <code>{{ extracted.search_trino or "–" }}</code>,
+      clickstream <code>{{ extracted.search_hydra or "–" }}</code>.</li>
+  </ul>
+</section>
+</div>
+{% endblock %}

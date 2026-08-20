@@ -42,7 +42,12 @@ TABS = KPI_TABS  # legacy alias; hand routes below still reference it
 
 SEARCH_TABS = [
     ("search", "/search", "Search"),
+    ("search_methodology", "/search/methodology", "Methodology"),
+    ("search_definitions", "/search/definitions", "Definitions"),
 ]
+
+# tabs with hand-written routes, skipped by the render_tab registration loop
+HAND_ROUTED = {"dictionary", "player", "search_methodology", "search_definitions"}
 
 JIRA_REQUEST_URL = (
     "https://tteam.atlassian.net/jira/software/projects/AN/list"
@@ -633,25 +638,35 @@ def _slice_ratio(num_metric, den_metric, grain, dim_name, dim_value, as_pct=True
     return out
 
 
-def _search_funnel():
-    """Latest full week's funnel: search users → ad viewers → repliers."""
+def _search_funnel_marimekko(weeks=5):
+    """Funnel composition over the last N full weeks as a marimekko: column
+    width = that week's avg daily search users, segments = the mutually
+    exclusive engagement split (searched only / ad view only / replied),
+    which sums exactly to search users — unlike the nested funnel stages."""
     users = data.series_at("search_users", "weekly")
     adview = dict(data.series_at("search_users_adview", "weekly"))
     lead = dict(data.series_at("search_users_lead", "weekly"))
-    for period, u in reversed(users):
-        if period in adview and period in lead and u:
-            stages = [
-                ["Search users", u, 1.0],
-                ["Reached an ad view", adview[period], adview[period] / u],
-                ["Sent a reply", lead[period], lead[period] / u],
-            ]
-            trino_meta = data.meta().get("search_trino") or {}
-            extracted = (trino_meta.get("extracted_at_utc") or "")[:10]
-            note = (AVG_DAILY_NOTE + " All platforms and methods."
-                    + (" Search data extracted %s." % extracted if extracted else ""))
-            return {"kind": "funnel", "title": "Search funnel — week of " + period,
-                    "stages": stages, "note": note, "info": info("search_users")}
-    return None
+    cols = []
+    for period, u in users[-weeks:]:
+        a, l = adview.get(period), lead.get(period)
+        if not u or a is None or l is None:
+            continue
+        cols.append({"label": period, "total": u, "segs": [
+            ["Searched only", max(u - a, 0)],
+            ["Ad view only", max(a - l, 0)],
+            ["Sent a reply", l],
+        ]})
+    if len(cols) < 2:
+        return None
+    trino_meta = data.meta().get("search_trino") or {}
+    extracted = (trino_meta.get("extracted_at_utc") or "")[:10]
+    note = ("Column width = that week's avg daily search users; segments are "
+            "exclusive (they sum to all search users). "
+            + AVG_DAILY_NOTE + " All platforms and methods."
+            + (" Search data extracted %s." % extracted if extracted else ""))
+    return {"kind": "marimekko",
+            "title": "Search funnel by week — last %d weeks" % len(cols),
+            "cols": cols, "note": note, "info": info("search_users")}
 
 
 def _search_treemap():
@@ -761,6 +776,40 @@ def _search_kwtable():
     }
 
 
+def _platform_share_area(wk):
+    """100%-stacked platform mix of search users, legend shows first → last
+    share. Shares are of the SUM of platform values (a user active on two
+    platforms counts in both, so this is a mix, not an exact partition)."""
+    values = data.dim_values("search_users", "platform", top_n=6)
+    if not values:
+        return None
+    per_value = {v: dict(data.series_at("search_users", wk, "platform", v))
+                 for v in values}
+    periods = sorted(set().union(*per_value.values()))
+    shares = {v: [] for v in values}
+    for p in periods:
+        tot = sum(per_value[v].get(p, 0) for v in values)
+        if not tot:
+            continue
+        for v in values:
+            shares[v].append([p, round(per_value[v].get(p, 0) / tot * 100, 2)])
+    series = []
+    for v in values:
+        pts = shares[v]
+        if not pts:
+            continue
+        series.append({"label": "%s %.0f%% → %.0f%%" % (v, pts[0][1], pts[-1][1]),
+                       "points": pts, "_last": pts[-1][1]})
+    if not series:
+        return None
+    series.sort(key=lambda s: -s.pop("_last"))  # largest = bottom layer
+    return {"kind": "sharearea", "title": "Platform mix of search users",
+            "grain": wk, "series": series, "pct": True,
+            "note": "Share of the sum of platform search users per week; a "
+                    "user active on two platforms counts in both.",
+            "info": info("search_users")}
+
+
 def _method_volume_stacked(wk, methods):
     series = [{"label": m, "points": data.series_at("search_volume", wk, "method", m)}
               for m in methods]
@@ -800,7 +849,7 @@ def build_search():
     platforms = data.dim_values("search_users", "platform", top_n=4)
     methods = ["Keyword", "Browsing"]
     charts = [
-        _search_funnel(),
+        _search_funnel_marimekko(),
         _s_line("Funnel conversion trend",
                 [wk_series("search_ssu_adview", "total", data.TOTAL,
                            "Search → ad view"),
@@ -811,6 +860,7 @@ def build_search():
         _s_line("Search users by platform",
                 [wk_series("search_users", "platform", p) for p in platforms],
                 wk, note=AVG_DAILY_NOTE, info_key="search_users"),
+        _platform_share_area(wk),
         _s_line("Search volume",
                 [wk_series("search_volume", "total", data.TOTAL, "Searches")],
                 wk, area=True, note=AVG_DAILY_NOTE, info_key="search_volume"),
@@ -1063,13 +1113,45 @@ def create_app():
     def dictionary():
         built, age_h, level = data.freshness() if data.available() else (None, None, "missing")
         entries = sorted(
-            ({"metric": k, **v} for k, v in METRIC_DEFS.items()),
+            ({"metric": k, **v} for k, v in METRIC_DEFS.items()
+             if not k.startswith("search_")),   # search metrics live on /search/definitions
             key=lambda e: e["label"].lower(),
         )
         return render_template(
             "dictionary.html", tabs=TABS, active="dictionary", entries=entries,
             built_at=built, age_hours=age_h, freshness=level,
             dash_title=KPI_DASH_TITLE,
+        )
+
+    @app.route("/search/definitions")
+    def search_definitions():
+        built, age_h, level = data.freshness() if data.available() else (None, None, "missing")
+        entries = sorted(
+            ({"metric": k, **v} for k, v in METRIC_DEFS.items()
+             if k.startswith("search_")),
+            key=lambda e: e["label"].lower(),
+        )
+        return render_template(
+            "dictionary.html", tabs=SEARCH_TABS, active="search_definitions",
+            entries=entries, built_at=built, age_hours=age_h, freshness=level,
+            dash_title=SEARCH_DASH_TITLE, dict_title="Search metric definitions",
+            dict_intro="Every metric on the Search dashboard, its definition and "
+                       "lineage. Two sources with different definitions of a "
+                       "'search' feed this page — see the Methodology tab for "
+                       "how they are built and why their volumes are never "
+                       "compared directly.",
+        )
+
+    @app.route("/search/methodology")
+    def search_methodology():
+        built, age_h, level = data.freshness() if data.available() else (None, None, "missing")
+        m = data.meta() if data.available() else {}
+        extracted = {k: (m.get(k) or {}).get("extracted_at_utc")
+                     for k in ("search_trino", "search_hydra")}
+        return render_template(
+            "search_methodology.html", tabs=SEARCH_TABS,
+            active="search_methodology", built_at=built, age_hours=age_h,
+            freshness=level, dash_title=SEARCH_DASH_TITLE, extracted=extracted,
         )
 
     def render_tab(tab_id):
@@ -1124,7 +1206,7 @@ def create_app():
 
     for dash in DASHBOARDS:
         for tab_id, path, _label in dash["tabs"]:
-            if tab_id in ("dictionary", "player"):
+            if tab_id in HAND_ROUTED:
                 continue
             app.add_url_rule(path, tab_id, (lambda t=tab_id: render_tab(t)))
 

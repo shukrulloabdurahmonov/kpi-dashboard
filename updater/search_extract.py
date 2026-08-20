@@ -38,7 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config import settings                                     # noqa: E402
 from updater import search_merge, store                         # noqa: E402
 from updater.db import Warehouse, warehouse_reachable           # noqa: E402
-from updater.periods import month_key, week_start               # noqa: E402
+from updater.periods import month_key                           # noqa: E402
 from updater.search_common import (                             # noqa: E402
     SEARCH_DAILY_RETENTION_DAYS,
 )
@@ -451,18 +451,18 @@ def main():
     args = ap.parse_args()
 
     today = date.today()
+    # Trino is always pulled full-history: the queries are cheap (~2 min
+    # total) and a full payload is self-healing — merging it rebuilds the
+    # box's Trino metrics from scratch even into an empty store. Only the
+    # hydra scans are windowed (--backfill widens them to full history;
+    # merge keeps the box's older hydra months either way).
+    weekly_start = TRINO_WEEKLY_START
+    monthly_start = TRINO_MONTHLY_START
+    daily_start = (today - timedelta(days=SEARCH_DAILY_RETENTION_DAYS - 1)
+                   ).isoformat()
     if args.backfill:
-        weekly_start = TRINO_WEEKLY_START
-        monthly_start = TRINO_MONTHLY_START
-        daily_start = (today - timedelta(days=SEARCH_DAILY_RETENTION_DAYS - 1)
-                       ).isoformat()
         hydra_start = HYDRA_START
     else:
-        weekly_start = (week_start(today) - timedelta(weeks=3)).isoformat()
-        monthly_start = month_key(
-            (today.replace(day=1) - timedelta(days=62))) + "-01"
-        daily_start = (today - timedelta(
-            days=settings.ROLLING_DAILY_REFRESH_DAYS)).isoformat()
         hydra_start = (today.replace(day=1) - timedelta(days=32)
                        ).replace(day=1).isoformat()
 

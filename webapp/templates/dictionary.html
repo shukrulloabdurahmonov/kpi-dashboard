@@ -1,11 +1,13 @@
 {% extends "base.html" %}
 {% block content %}
-<h2 class="dict-title">Data dictionary</h2>
+<h2 class="dict-title">{{ dict_title or "Data dictionary" }}</h2>
 <p class="dict-intro">
+  {% if dict_intro %}{{ dict_intro }}{% else %}
   Every metric on this dashboard, its definition and lineage. All numbers are
   pre-aggregated in the warehouse for OLX UZ (<code>site_sk = 'olx|eu|uz'</code>);
   each filter slice is computed independently, so distinct counts are always exact
   and never re-aggregated. Monthly history: 24 months. Daily history: 90 days.
+  {% endif %}
 </p>
 <div class="dict-wrap">
 <table class="dict">

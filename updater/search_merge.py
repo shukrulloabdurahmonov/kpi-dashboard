@@ -46,14 +46,22 @@ def merge(payload_path, store_path):
             n_new = conn.execute("SELECT COUNT(*) FROM payload.metrics").fetchone()[0]
             if n_new == 0:
                 raise RuntimeError("payload has no metrics rows — refusing to merge")
-            # replace only the metrics the payload actually carries, so a run
-            # that skipped one source doesn't wipe the other's rows
-            conn.execute(
-                "DELETE FROM metrics WHERE metric LIKE ? AND metric IN "
-                "(SELECT DISTINCT metric FROM payload.metrics)",
-                (SEARCH_PREFIX + "%",))
-            conn.execute("INSERT INTO metrics SELECT * FROM payload.metrics "
-                         "WHERE metric LIKE '%s%%'" % SEARCH_PREFIX)
+            # Window-scoped replace: per (metric, grain), drop only periods the
+            # payload re-delivers (>= its min period) and keep older history.
+            # A full-history payload therefore fully replaces; a rolling one
+            # replaces just its window. Metrics absent from the payload are
+            # untouched (a run that skipped one source keeps the other's rows).
+            scopes = conn.execute(
+                "SELECT metric, grain, MIN(period) FROM payload.metrics "
+                "WHERE metric LIKE ? GROUP BY metric, grain",
+                (SEARCH_PREFIX + "%",)).fetchall()
+            for metric, grain, min_period in scopes:
+                conn.execute(
+                    "DELETE FROM metrics WHERE metric = ? AND grain = ? "
+                    "AND period >= ?", (metric, grain, min_period))
+            conn.execute("INSERT OR REPLACE INTO metrics "
+                         "SELECT * FROM payload.metrics WHERE metric LIKE ?",
+                         (SEARCH_PREFIX + "%",))
 
             # an extract run that skipped hydra ships no keywords — keep ours
             n_kw = conn.execute(
