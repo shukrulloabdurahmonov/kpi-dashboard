@@ -437,8 +437,8 @@ def pull_hydra_keywords(wh, d1, d2):
         _, rows = wh.query(sql, None)
         disp = HYDRA_PLATFORM_DISPLAY[platform]
         out.extend((disp, kw, int(s), int(z), int(lo),
-                    round(float(a), 1) if a is not None else None)
-                   for _p, kw, s, z, lo, a in rows)
+                    round(float(a), 1) if a is not None else None, int(nf))
+                   for _p, kw, s, z, lo, a, nf in rows)
         log.info("[keywords@%s] %d keywords", platform, len(rows))
     return out
 

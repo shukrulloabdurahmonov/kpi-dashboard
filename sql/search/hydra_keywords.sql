@@ -8,7 +8,8 @@ SELECT '{platform}' AS platform,
        COUNT(*) AS searches,
        SUM(CASE WHEN e.result_count = 0 THEN 1 ELSE 0 END) AS zsr,
        SUM(CASE WHEN e.result_count BETWEEN {low_min} AND {low_max} THEN 1 ELSE 0 END) AS low,
-       AVG(e.result_count) AS avg_results
+       AVG(e.result_count) AS avg_results,
+       SUM(CASE WHEN COALESCE(e.filters_count, 0) = 0 THEN 1 ELSE 0 END) AS no_filter
 FROM hydra.{table} e
 LEFT JOIN eu_bi.map_ip_blacklist bl ON e.ip_address = bl.crawler_ip_hash
 WHERE e.country_code = 'UZ'
