@@ -44,7 +44,7 @@ SEARCH_TABS = [
     ("search", "/search", "Search volume"),
     ("search_users_tab", "/search/users", "Search users"),
     ("search_zsr", "/search/zsr", "Zero results"),
-    ("search_ctr", "/search/ctr", "CTR"),
+    ("search_ctr", "/search/ctr", "CTR & success"),
     ("search_keywords", "/search/keywords", "Keywords"),
     ("search_methodology", "/search/methodology", "Methodology"),
     ("search_definitions", "/search/definitions", "Definitions"),
@@ -1482,7 +1482,37 @@ def _ctr_totals_table(months=13):
             "info": info("search_ctr")}
 
 
+def _success_trend(num, den, title, info_key, note):
+    """Rate trend for a distinct-count pair, with per-platform lines via the
+    platform filter and a D/M grain toggle."""
+    def variant(gg):
+        pts = _slice_ratio(num, den, gg, "total", data.TOTAL)
+        if not pts:
+            return None
+        return {"grain": gg, "series": [{"label": title, "points": pts}],
+                "pfdata": {"": {p: r for p in SEARCH_HYDRA_PLATS
+                                if (r := _slice_ratio(num, den, gg,
+                                                      "platform", p))}}}
+
+    base = variant("monthly")
+    if base is None:
+        return None
+    chart = _s_line(title, base["series"], "monthly", pct=True,
+                    info_key=info_key, note=note)
+    if base["pfdata"][""]:
+        chart = _with_pf(chart, "lines", base["pfdata"])
+    return _with_grains(chart, variant, grains=("daily", "monthly"),
+                        default="monthly")
+
+
+SEARCH_HYDRA_PLATS = ("Android", "iOS", "Web")
+
+
 def build_search_ctr():
+    qsr = _slice_ratio("search_queries_clicked", "search_queries", "monthly",
+                       "total", data.TOTAL)
+    likes = _slice_ratio("search_sessions_liked", "search_sessions", "monthly",
+                         "total", data.TOTAL)
     cards = [
         _s_card("CTR@1 — search", _ctr_ratio("p1", "Search"), "monthly",
                 fmt="pct", info_key="search_ctr"),
@@ -1492,12 +1522,28 @@ def build_search_ctr():
                 fmt="pct", info_key="search_ctr"),
         _s_card("CTR@40 — navigation", _ctr_ratio("p40", "Navigation"),
                 "monthly", fmt="pct", info_key="search_ctr"),
+        _s_card("Query success rate", qsr, "monthly", fmt="pct",
+                info_key="search_queries"),
+        _s_card("Likes card rate", likes, "monthly", fmt="pct",
+                info_key="search_sessions"),
     ]
     charts = [
+        _section("Click-through rates"),
         _ctr_trend("Search"),
         _ctr_trend("Navigation"),
         _ctr_platform_bars("Search"),
         _ctr_platform_bars("Navigation"),
+        _section("Search success"),
+        _success_trend("search_queries_clicked", "search_queries",
+                       "Query success rate", "search_queries",
+                       "Distinct keyword searches with ≥1 SERP ad click ÷ all "
+                       "distinct searches that period. Understated: only ~2/3 "
+                       "of clicks carry the search id needed for attribution."),
+        _success_trend("search_sessions_liked", "search_sessions",
+                       "Likes card rate", "search_sessions",
+                       "Sessions that saved ≥1 ad to favourites ÷ sessions "
+                       "with ≥1 keyword search, same period."),
+        _section("Totals"),
         _ctr_totals_table(),
     ]
     return {"cards": cards, "charts": charts}

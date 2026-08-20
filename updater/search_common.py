@@ -46,6 +46,10 @@ HYDRA_METRICS = [
     "search_ctr_clicks_p1",       # ...on position 1
     "search_ctr_clicks_p3",       # ...on positions 1-3
     "search_ctr_clicks_p40",      # ...on positions 1-40 (~first page)
+    "search_queries",             # distinct keyword searches (search_id)
+    "search_queries_clicked",     # ...that got >=1 SERP ad click
+    "search_sessions",            # distinct sessions with >=1 keyword search
+    "search_sessions_liked",      # ...that saved >=1 ad to favourites
 ]
 
 # ratio/average metrics whose slices must never be summed

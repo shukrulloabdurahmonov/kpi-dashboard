@@ -562,6 +562,34 @@ METRIC_DEFS.update({
                    "so it is not a per-session deduplicated CTR and CAN exceed "
                    "100%. Position 40 ≈ one result page.",
     },
+    "search_queries": {
+        "label": "Query success rate",
+        "definition": "Share of distinct keyword searches that got at least one "
+                      "ad click on the results page.",
+        "formula": "COUNT(DISTINCT search_id with >=1 attributed ad_click) / "
+                   "COUNT(DISTINCT search_id) per period",
+        "source": "hydra.web / hydra.android / hydra.ios (yamato)",
+        "grain": "monthly + daily (90d)",
+        "dims": "platform",
+        "caveats": "UNDERSTATED: search_id is present on every SERP view but "
+                   "only on ~2/3 of ad clicks (Android sample), so unattributable "
+                   "clicks don't count as success. Distinct counts — never sum "
+                   "across periods; the platform total is exact (device-scoped ids "
+                   "are disjoint).",
+    },
+    "search_sessions": {
+        "label": "Likes card rate",
+        "definition": "Share of sessions that ran at least one keyword search and "
+                      "saved at least one ad to favourites in the same period.",
+        "formula": "COUNT(DISTINCT session_long with favourite_ad_click) / "
+                   "COUNT(DISTINCT session_long with >=1 keyword SERP) per period",
+        "source": "hydra.web / hydra.android / hydra.ios (yamato)",
+        "grain": "monthly + daily (90d)",
+        "dims": "platform",
+        "caveats": "The favourite can happen anywhere in the session, not "
+                   "necessarily from the results page. Distinct counts — never "
+                   "sum across periods.",
+    },
     "search_keywords_table": {
         "label": "Top search keywords",
         "definition": "Most-searched keywords over the last 28 days with their "

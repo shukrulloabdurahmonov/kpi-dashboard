@@ -256,6 +256,8 @@ NON_ADDITIVE = {
     "search_ssu_adview", "search_ssu_lead",
     "search_avg_adview_su", "search_avg_lead_su", "search_share_on_platform",
     "search_filter_avg_results", "search_filter_use",  # avg / overlapping counts
+    "search_queries", "search_queries_clicked",        # distinct counts
+    "search_sessions", "search_sessions_liked",
 }
 
 

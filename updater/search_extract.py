@@ -524,6 +524,52 @@ def pull_hydra_ctr(wh, d1, d2, daily_from):
     return [(m, g, p, dn, dv, v) for (m, g, p, dn, dv), v in agg.items()]
 
 
+QSR_METRICS = {"queries": ("search_queries", "search_queries_clicked"),
+               "sessions": ("search_sessions", "search_sessions_liked")}
+
+
+def pull_hydra_qsr(wh, d1, d2, daily_from):
+    """Query Success Rate + Likes Card Rate inputs: distinct keyword searches
+    (and how many got a click) and distinct searching sessions (and how many
+    saved a favourite). Distinct counts — each grain grouped natively in SQL.
+    Platform ids are device-scoped, so the cross-platform 'total' dim is the
+    exact union (sum of disjoint sets)."""
+    template = read_sql("hydra_qsr.sql")
+    agg = {}
+
+    def add(metric, grain, period, dim_name, dim_value, v):
+        key = (metric, grain, period, dim_name, dim_value)
+        agg[key] = agg.get(key, 0) + v
+
+    period_exprs = {
+        "daily": "e.server_date_day::date",
+        "monthly": "DATE_TRUNC('month', e.server_date_day)::date",
+    }
+    for platform, predicate in HYDRA_PLATFORMS.items():
+        disp = HYDRA_PLATFORM_DISPLAY[platform]
+        for c1, c2 in month_chunks(d1, d2):
+            for grain, pexpr in period_exprs.items():
+                if grain == "daily" and c2 < daily_from:
+                    continue
+                sql = template.format(table=platform, serp_predicate=predicate,
+                                      period_expr=pexpr, d1=c1, d2=c2,
+                                      sentinel=SENTINEL, bot_filter=BOT_FILTER)
+                cols, rows = wh.query(sql, None)
+                for r in dictrows(cols, rows):
+                    period_raw = str(r["period"])[:10]
+                    period = (month_key(date.fromisoformat(period_raw))
+                              if grain == "monthly" else period_raw)
+                    if grain == "daily" and period < daily_from:
+                        continue
+                    m_total, m_hit = QSR_METRICS[r["row_kind"]]
+                    for metric, v in ((m_total, float(r["total"])),
+                                      (m_hit, float(r["hit"]))):
+                        add(metric, grain, period, *TOTAL_DIM, v=v)
+                        add(metric, grain, period, "platform", disp, v=v)
+            log.info("[qsr@%s] chunk %s..%s done", platform, c1, c2)
+    return [(m, g, p, dn, dv, v) for (m, g, p, dn, dv), v in agg.items()]
+
+
 def pull_hydra_keywords(wh, d1, d2):
     """Top keywords per platform, ranked separately for filtered and bare
     searches — each slice carries its own zsr/low/avg figures."""
@@ -661,6 +707,8 @@ def main():
                 rows += pull_hydra_filters(wh, hydra_start, yesterday)
                 rows += pull_hydra_zsr_categories(wh, hydra_start, yesterday)
                 rows += pull_hydra_ctr(wh, hydra_start, yesterday,
+                                       daily_from=daily_start)
+                rows += pull_hydra_qsr(wh, hydra_start, yesterday,
                                        daily_from=daily_start)
                 kw_rows = pull_hydra_keywords(wh, kw_d1, kw_d2)
                 metric_rows += rows
