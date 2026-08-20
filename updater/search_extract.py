@@ -436,9 +436,13 @@ def pull_hydra_keywords(wh, d1, d2):
                               min_searches=KEYWORD_MIN_SEARCHES)
         _, rows = wh.query(sql, None)
         disp = HYDRA_PLATFORM_DISPLAY[platform]
-        out.extend((disp, kw, int(s), int(z), int(lo),
-                    round(float(a), 1) if a is not None else None, int(nf))
-                   for _p, kw, s, z, lo, a, nf in rows)
+
+        def r1(v):
+            return round(float(v), 1) if v is not None else None
+
+        out.extend((disp, kw, int(s), int(z), int(lo), r1(a), int(nf),
+                    r1(af), r1(an))
+                   for _p, kw, s, z, lo, a, nf, af, an in rows)
         log.info("[keywords@%s] %d keywords", platform, len(rows))
     return out
 

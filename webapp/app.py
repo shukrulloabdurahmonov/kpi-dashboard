@@ -806,13 +806,15 @@ def _search_kwtable():
         return None
     hydra_disp = {"web": "Web", "android": "Android", "ios": "iOS"}
     rows = []
-    for platform, kw, searches, zsr, low, avg_results, no_filter in payload["rows"]:
+    for (platform, kw, searches, zsr, low, _avg_results, no_filter,
+         avg_filtered, avg_nofilter) in payload["rows"]:
         platform = hydra_disp.get(platform, platform)
         filtered = (searches - no_filter) if no_filter is not None else None
-        rows.append([kw, platform, searches, filtered, no_filter,
+        rows.append([kw, platform, searches,
+                     filtered, avg_filtered,
+                     no_filter, avg_nofilter,
                      round(zsr / searches * 100.0, 1) if searches else None,
-                     round(low / searches * 100.0, 1) if searches else None,
-                     avg_results])
+                     round(low / searches * 100.0, 1) if searches else None])
     d1, d2 = payload["window"]
     window = (" (%s → %s)" % (d1, d2)) if d1 and d2 else ""
     return {
@@ -822,18 +824,19 @@ def _search_kwtable():
             {"key": "platform", "label": "Platform"},
             {"key": "searches", "label": "Searches", "num": True},
             {"key": "filtered", "label": "With filters", "num": True},
+            {"key": "avg_filtered", "label": "Avg results (filtered)", "num": True},
             {"key": "no_filter", "label": "No filters", "num": True},
+            {"key": "avg_nofilter", "label": "Avg results (no filters)", "num": True},
             {"key": "zsr_pct", "label": "ZSR %", "num": True, "pct": True},
             {"key": "low_pct", "label": "Low-supply %", "num": True, "pct": True},
-            {"key": "avg_results", "label": "Avg results (≤1000)", "num": True},
         ],
         "rows": rows, "platforms": ["Web", "Android", "iOS"],
         "note": "First-page keyword SERPs, bot-filtered. 'With filters' counts "
                 "searches narrowed by any criterion (category, region, price, "
-                "attribute filters); 'No filters' is the bare query. Result "
-                "counts are CAPPED at 1000 by the app, so 'avg results' "
-                "understates deep inventory — broad queries mostly sit at the "
-                "cap. " + ZSR_PLATFORM_NOTE,
+                "attribute filters); 'No filters' is the bare query. Both avg "
+                "columns are CAPPED at 1000 by the app, so they understate "
+                "deep inventory — bare broad queries mostly sit at the cap. "
+                + ZSR_PLATFORM_NOTE,
         "info": info("search_keywords_table"),
     }
 
