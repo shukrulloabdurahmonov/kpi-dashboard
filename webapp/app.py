@@ -904,7 +904,10 @@ def _search_zsr_region_bars():
     rows.sort(key=lambda r: -r[1])
     return {"kind": "barh", "title": "Zero-result rate by region (Android) — " + period,
             "unit": "%", "rows": rows,
-            "note": ZSR_PLATFORM_NOTE, "info": info("search_zsr")}
+            "note": "Monthly rate from totals: zero-result searches ÷ all "
+                    "keyword searches that month, per region. "
+                    + ZSR_PLATFORM_NOTE,
+            "info": info("search_zsr")}
 
 
 def _search_kwtable(flag, title, note):
@@ -1267,7 +1270,8 @@ def _zsr_low_region_bars():
     return {"kind": "barh",
             "title": "Low-supply rate by region (Android) — " + period,
             "unit": "%", "rows": rows,
-            "note": "Share of keyword searches returning 1–10 results.",
+            "note": "Monthly rate from totals: searches returning 1–10 "
+                    "results ÷ all keyword searches that month, per region.",
             "info": info("search_zsr_low")}
 
 
@@ -1295,8 +1299,9 @@ def _zsr_category_bars(metric, title, info_key):
     rows.sort(key=lambda r: -r[1])
     return {"kind": "barh", "title": title + " — " + period,
             "unit": "%", "rows": rows[:14],
-            "note": "Android keyword searches, by the category the search "
-                    "was made in (category L1).",
+            "note": "Monthly rate from totals: the month's affected searches ÷ "
+                    "all keyword searches, per category L1 the search was "
+                    "made in (Android).",
             "info": info(info_key)}
 
 
