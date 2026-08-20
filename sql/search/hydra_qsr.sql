@@ -45,14 +45,14 @@ likes AS (
       AND e.eventname = 'favourite_ad_click'
     {bot_filter}
 )
-SELECT period, 'queries' AS row_kind,
+SELECT s.period AS period, 'queries' AS row_kind,
        COUNT(DISTINCT s.sid) AS total,
        COUNT(DISTINCT CASE WHEN c.sid IS NOT NULL THEN s.sid END) AS hit
 FROM serps s
 LEFT JOIN clicks c ON c.sid = s.sid
 GROUP BY 1
 UNION ALL
-SELECT period, 'sessions' AS row_kind,
+SELECT s.period AS period, 'sessions' AS row_kind,
        COUNT(DISTINCT s.sess) AS total,
        COUNT(DISTINCT CASE WHEN l.sess IS NOT NULL THEN s.sess END) AS hit
 FROM (SELECT DISTINCT period, sess FROM serps) s
