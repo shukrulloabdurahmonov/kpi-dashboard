@@ -1091,7 +1091,7 @@
 
   /* ---- sortable keywords table (DOM kind) ---------------------------------- */
 
-  var KW_ROW_CAP = 400;
+  var KW_PAGE = 25;
 
   function buildKwTable(fig, spec) {
     var holder = fig.querySelector(".chart-holder");
@@ -1099,7 +1099,7 @@
     if (canvas) canvas.remove();
     holder.style.height = "auto";
 
-    var state = { platform: "all", text: "", sortKey: "searches", dir: -1 };
+    var state = { platform: "all", text: "", sortKey: "searches", dir: -1, page: 0 };
     var platIdx = spec.columns.findIndex(function (c) { return c.key === "platform"; });
     var kwIdx = spec.columns.findIndex(function (c) { return c.key === "keyword"; });
 
@@ -1114,6 +1114,7 @@
       b.textContent = p === "all" ? "All platforms" : p;
       b.addEventListener("click", function () {
         state.platform = p;
+        state.page = 0;
         chips.querySelectorAll(".kw-chip").forEach(function (c) {
           c.classList.remove("active");
         });
@@ -1129,6 +1130,7 @@
     input.className = "kw-filter";
     input.addEventListener("input", function () {
       state.text = input.value.trim().toLowerCase();
+      state.page = 0;
       renderBody();
     });
     controls.appendChild(input);
@@ -1148,6 +1150,7 @@
       th.addEventListener("click", function () {
         if (state.sortKey === col.key) state.dir = -state.dir;
         else { state.sortKey = col.key; state.dir = col.num ? -1 : 1; }
+        state.page = 0;
         renderBody();
       });
       hr.appendChild(th);
@@ -1157,9 +1160,22 @@
     var tbody = document.createElement("tbody");
     table.appendChild(tbody);
     holder.appendChild(table);
-    var capNote = document.createElement("div");
-    capNote.className = "kw-cap";
-    holder.appendChild(capNote);
+    var pager = document.createElement("div");
+    pager.className = "kw-pager";
+    var prevBtn = document.createElement("button");
+    prevBtn.type = "button";
+    prevBtn.textContent = "\u2190 Prev";
+    var pageInfo = document.createElement("span");
+    pageInfo.className = "kw-cap";
+    var nextBtn = document.createElement("button");
+    nextBtn.type = "button";
+    nextBtn.textContent = "Next \u2192";
+    prevBtn.addEventListener("click", function () { state.page--; renderBody(); });
+    nextBtn.addEventListener("click", function () { state.page++; renderBody(); });
+    pager.appendChild(prevBtn);
+    pager.appendChild(pageInfo);
+    pager.appendChild(nextBtn);
+    holder.appendChild(pager);
 
     function renderBody() {
       var si = spec.columns.findIndex(function (c) { return c.key === state.sortKey; });
@@ -1181,7 +1197,9 @@
           i === si ? (state.dir > 0 ? "▲" : "▼") : "";
       });
       tbody.textContent = "";
-      var shown = rows.slice(0, KW_ROW_CAP);
+      var pages = Math.max(1, Math.ceil(rows.length / KW_PAGE));
+      state.page = Math.min(Math.max(state.page, 0), pages - 1);
+      var shown = rows.slice(state.page * KW_PAGE, (state.page + 1) * KW_PAGE);
       shown.forEach(function (r) {
         var tr = document.createElement("tr");
         spec.columns.forEach(function (col, i) {
@@ -1198,54 +1216,228 @@
         });
         tbody.appendChild(tr);
       });
-      capNote.textContent = rows.length > KW_ROW_CAP
-        ? "Showing top " + KW_ROW_CAP + " of " + rows.length.toLocaleString()
-          + " keywords — narrow with the filter."
-        : rows.length.toLocaleString() + " keywords.";
+      pageInfo.textContent = rows.length
+        ? "Page " + (state.page + 1) + " of " + pages + " · "
+          + rows.length.toLocaleString() + " keywords"
+        : "No keywords match.";
+      prevBtn.disabled = state.page <= 0;
+      nextBtn.disabled = state.page >= pages - 1;
     }
     renderBody();
+  }
+
+  function renderOne(fig, spec) {
+    var canvas = fig.querySelector("canvas");
+    if (!spec || !canvas) return;
+    if (spec.kind === "heatmap") { buildHeatmap(fig, spec); return; }
+    if (spec.kind === "matrix") { buildMatrix(fig, spec); return; }
+    if (spec.kind === "map") { buildMap(fig, spec); return; }
+    if (spec.kind === "marimekko") { buildMarimekko(fig, spec); return; }
+    if (spec.kind === "treemap") { buildTreemap(fig, spec); return; }
+    if (spec.kind === "kwtable") { buildKwTable(fig, spec); return; }
+    var holder = fig.querySelector(".chart-holder");
+    if ((spec.kind === "barh" || spec.kind === "divergingbarh") && spec.rows.length > 8) {
+      holder.style.height = (spec.rows.length * 28 + 60) + "px";
+    }
+    if (spec.kind === "barh") buildBarh(canvas, spec);
+    else if (spec.kind === "divergingbarh") buildDivergingBarh(canvas, spec);
+    else if (spec.kind === "stacked") buildStacked(canvas, spec);
+    else if (spec.kind === "sharearea") buildShareArea(canvas, spec);
+    else buildLine(canvas, spec);
+  }
+
+  /* ---- per-chart platform filter ------------------------------------------ */
+
+  function sumPts(list) {
+    var acc = {};
+    list.forEach(function (pts) {
+      (pts || []).forEach(function (p) { acc[p[0]] = (acc[p[0]] || 0) + p[1]; });
+    });
+    return Object.keys(acc).sort().map(function (k) { return [k, acc[k]]; });
+  }
+
+  function applyPfilter(spec, sel) {
+    if (!spec.pfilter || !sel.length) return spec;
+    var pf = spec.pfilter;
+    var eff = JSON.parse(JSON.stringify(spec));
+    var multi = sel.length > 1;
+    var who = sel.join(" + ");
+    if (pf.mode === "sum") {
+      eff.series = [{ label: who, points: sumPts(sel.map(function (p) { return pf.data[p]; })) }];
+    } else if (pf.mode === "sum_series") {
+      eff.series = Object.keys(pf.data).map(function (base) {
+        return { label: base, points: sumPts(sel.map(function (p) { return pf.data[base][p]; })) };
+      }).filter(function (s) { return s.points.length; });
+      eff.note = (eff.note || "") + " " + who + " only.";
+    } else if (pf.mode === "lines") {
+      var out = [];
+      Object.keys(pf.data).forEach(function (base) {
+        sel.forEach(function (p) {
+          var pts = pf.data[base][p];
+          if (pts && pts.length) {
+            out.push({ label: base ? base + " — " + p : p, points: pts });
+          }
+        });
+      });
+      eff.series = out;
+    } else if (pf.mode === "mekko") {
+      var labels = {};
+      sel.forEach(function (p) {
+        (pf.data[p] || []).forEach(function (c) {
+          var m = labels[c.label];
+          if (!m) {
+            m = labels[c.label] = { label: c.label, total: 0,
+              segs: c.segs.map(function (s) { return [s[0], 0]; }) };
+          }
+          m.total += c.total;
+          c.segs.forEach(function (s, i) { m.segs[i][1] += s[1]; });
+        });
+      });
+      eff.cols = Object.keys(labels).sort().map(function (k) { return labels[k]; });
+      if (eff.cols.length < 2) return spec;
+      eff.note = (eff.note || "") + " " + who + " only."
+        + (multi && pf.approx
+           ? " ≈ platform sums can double-count users active on several platforms."
+           : "");
+    } else if (pf.mode === "mix") {
+      var per = {};
+      sel.forEach(function (p) { if (pf.data[p]) per[p] = {}; });
+      var periods = {};
+      sel.forEach(function (p) {
+        (pf.data[p] || []).forEach(function (pt) {
+          per[p][pt[0]] = pt[1]; periods[pt[0]] = 1;
+        });
+      });
+      var keys = Object.keys(periods).sort();
+      var series = [];
+      Object.keys(per).forEach(function (p) {
+        var pts = [];
+        keys.forEach(function (k) {
+          var tot = 0;
+          Object.keys(per).forEach(function (q) { tot += per[q][k] || 0; });
+          if (tot) pts.push([k, Math.round((per[p][k] || 0) / tot * 10000) / 100]);
+        });
+        if (pts.length) {
+          series.push({ label: p + " " + pts[0][1].toFixed(0) + "% → "
+                        + pts[pts.length - 1][1].toFixed(0) + "%",
+                        points: pts, _last: pts[pts.length - 1][1] });
+        }
+      });
+      series.sort(function (a, b) { return b._last - a._last; });
+      series.forEach(function (s) { delete s._last; });
+      if (!series.length) return spec;
+      eff.series = series;
+      eff.note = (eff.note || "") + " Mix among: " + who + ".";
+    } else if (pf.mode === "map") {
+      var rows = {};
+      sel.forEach(function (p) {
+        (pf.data[p] || []).forEach(function (r) { rows[r[0]] = (rows[r[0]] || 0) + r[1]; });
+      });
+      eff.rows = Object.keys(rows).map(function (k) { return [k, rows[k]]; })
+        .sort(function (a, b) { return b[1] - a[1]; });
+      if (!eff.rows.length) return spec;
+      eff.note = (eff.note || "") + " " + who + " only.";
+    }
+    return eff;
+  }
+
+  function rebuildChart(fig) {
+    var base;
+    try { base = JSON.parse(fig.dataset.chart); } catch (e) { return; }
+    var eff = applyPfilter(base, fig._psel || []);
+    var old = fig.querySelector("canvas");
+    var inst = old && typeof Chart !== "undefined" && Chart.getChart
+      ? Chart.getChart(old) : null;
+    if (inst) inst.destroy();
+    var holder = fig.querySelector(".chart-holder");
+    holder.textContent = "";
+    holder.style.height = "";
+    holder.appendChild(document.createElement("canvas"));
+    renderOne(fig, eff);
+  }
+
+  function attachPlatformFilter(fig, pf) {
+    var cap = fig.querySelector("figcaption");
+    if (!cap) return;
+    var btn = document.createElement("button");
+    btn.className = "pf-btn";
+    btn.type = "button";
+    btn.textContent = "Platforms ▾";
+    var pop = document.createElement("div");
+    pop.className = "pf-pop";
+    pop.hidden = true;
+    var boxes = [];
+
+    function selection() {
+      var sel = boxes.filter(function (b) { return b.checked; })
+        .map(function (b) { return b.value; });
+      return sel.length === pf.platforms.length ? [] : sel;  // all = default
+    }
+
+    var allLab = document.createElement("label");
+    var allBox = document.createElement("input");
+    allBox.type = "checkbox";
+    allBox.checked = true;
+    allLab.appendChild(allBox);
+    allLab.appendChild(document.createTextNode(" All platforms"));
+    pop.appendChild(allLab);
+    pf.platforms.forEach(function (p) {
+      var lab = document.createElement("label");
+      var box = document.createElement("input");
+      box.type = "checkbox";
+      box.value = p;
+      box.checked = true;
+      boxes.push(box);
+      lab.appendChild(box);
+      lab.appendChild(document.createTextNode(" " + p));
+      pop.appendChild(lab);
+    });
+
+    function apply() {
+      fig._psel = selection();
+      allBox.checked = !fig._psel.length;
+      btn.textContent = fig._psel.length
+        ? "Platforms: " + (fig._psel.length === 1 ? fig._psel[0]
+                           : fig._psel.length + " selected") + " ▾"
+        : "Platforms ▾";
+      btn.classList.toggle("active", !!fig._psel.length);
+      rebuildChart(fig);
+    }
+
+    allBox.addEventListener("change", function () {
+      boxes.forEach(function (b) { b.checked = allBox.checked; });
+      if (!allBox.checked) boxes.forEach(function (b) { b.checked = true; });
+      apply();
+    });
+    boxes.forEach(function (b) {
+      b.addEventListener("change", function () {
+        if (!boxes.some(function (x) { return x.checked; })) b.checked = true;
+        apply();
+      });
+    });
+    btn.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      pop.hidden = !pop.hidden;
+    });
+    document.addEventListener("click", function (ev) {
+      if (!pop.hidden && !pop.contains(ev.target)) pop.hidden = true;
+    });
+    var fs = cap.querySelector(".fs-btn");
+    cap.insertBefore(btn, fs);
+    cap.style.position = "relative";
+    cap.appendChild(pop);
   }
 
   function renderCharts() {
     document.querySelectorAll(".chart-card[data-chart]").forEach(function (fig) {
       var spec;
       try { spec = JSON.parse(fig.dataset.chart); } catch (e) { return; }
-      var canvas = fig.querySelector("canvas");
       if (!spec) return;
-      if (spec.kind === "heatmap") {
-        if (canvas) buildHeatmap(fig, spec);
-        return;
+      if (spec.pfilter && spec.pfilter.platforms
+          && spec.pfilter.platforms.length > 1) {
+        attachPlatformFilter(fig, spec.pfilter);
       }
-      if (spec.kind === "matrix") {
-        if (canvas) buildMatrix(fig, spec);
-        return;
-      }
-      if (spec.kind === "map") {
-        if (canvas) buildMap(fig, spec);
-        return;
-      }
-      if (spec.kind === "marimekko") {
-        if (canvas) buildMarimekko(fig, spec);
-        return;
-      }
-      if (spec.kind === "treemap") {
-        if (canvas) buildTreemap(fig, spec);
-        return;
-      }
-      if (spec.kind === "kwtable") {
-        if (canvas) buildKwTable(fig, spec);
-        return;
-      }
-      if (!canvas) return;
-      var holder = fig.querySelector(".chart-holder");
-      if ((spec.kind === "barh" || spec.kind === "divergingbarh") && spec.rows.length > 8) {
-        holder.style.height = (spec.rows.length * 28 + 60) + "px";
-      }
-      if (spec.kind === "barh") buildBarh(canvas, spec);
-      else if (spec.kind === "divergingbarh") buildDivergingBarh(canvas, spec);
-      else if (spec.kind === "stacked") buildStacked(canvas, spec);
-      else if (spec.kind === "sharearea") buildShareArea(canvas, spec);
-      else buildLine(canvas, spec);
+      renderOne(fig, spec);
     });
   }
 

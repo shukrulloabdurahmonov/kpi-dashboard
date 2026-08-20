@@ -652,27 +652,32 @@ SEARCH_GRAIN_INV = {g: p for p, g, _ in SEARCH_GRAINS}
 
 
 def _search_ctx():
-    """Page-local controls: ?platform=<display name>&grain=day|week|month."""
-    plat = request.args.get("platform", "")
-    if plat not in SEARCH_PLATFORMS:
-        plat = ""
-    grain = SEARCH_GRAIN_PARAM.get(request.args.get("grain", ""), "weekly")
-    return plat, grain
+    """Page-local control: ?grain=day|week|month (platform filtering is
+    per-chart, client-side, via each chart's pfilter payload)."""
+    return SEARCH_GRAIN_PARAM.get(request.args.get("grain", ""), "weekly")
 
 
-def _search_controls(plat, grain):
-    def url(p, g):
-        parts = (["platform=" + quote(p)] if p else []) \
-            + (["grain=" + SEARCH_GRAIN_INV[g]] if g != "weekly" else [])
-        return request.path + (("?" + "&".join(parts)) if parts else "")
-    return {
-        "platforms": [{"label": "All platforms", "url": url("", grain),
-                       "active": not plat}]
-                     + [{"label": p, "url": url(p, grain), "active": plat == p}
-                        for p in SEARCH_PLATFORMS],
-        "grains": [{"label": label, "url": url(plat, g), "active": grain == g}
-                   for _, g, label in SEARCH_GRAINS],
-    }
+def _search_controls(grain):
+    def url(g):
+        return request.path + (("?grain=" + SEARCH_GRAIN_INV[g])
+                               if g != "weekly" else "")
+    return {"grains": [{"label": label, "url": url(g), "active": grain == g}
+                       for _, g, label in SEARCH_GRAINS]}
+
+
+def _pp(metric, grain, method=None):
+    """{platform: series} for every platform that has data — the payload a
+    chart's client-side platform filter recombines."""
+    out = {}
+    for p in SEARCH_PLATFORMS:
+        if method:
+            pts = data.series_at(metric, grain, "platform|method",
+                                 p + data.PAIR_SEP + method)
+        else:
+            pts = data.series_at(metric, grain, "platform", p)
+        if pts:
+            out[p] = pts
+    return out
 
 
 def _psl(metric, grain, plat, method=None):
@@ -709,14 +714,12 @@ def _noplat(note, plat):
 GRAIN_WORD = {"daily": "day", "weekly": "week", "monthly": "month"}
 
 
-def _search_funnel_marimekko(grain, plat, periods=5):
-    """Funnel composition over the last N full periods as a marimekko: column
-    width = that period's avg daily search users, segments = the mutually
-    exclusive engagement split (searched only / ad view only / replied),
-    which sums exactly to search users — unlike the nested funnel stages."""
-    users = _psl("search_users", grain, plat)
-    adview = dict(_psl("search_users_adview", grain, plat))
-    lead = dict(_psl("search_users_lead", grain, plat))
+def _mekko_cols(grain, dim_name="total", dim_value=None, periods=5):
+    dim_value = dim_value or data.TOTAL
+    users = data.series_at("search_users", grain, dim_name, dim_value)
+    adview = dict(data.series_at("search_users_adview", grain,
+                                 dim_name, dim_value))
+    lead = dict(data.series_at("search_users_lead", grain, dim_name, dim_value))
     cols = []
     for period, u in users[-periods:]:
         a, l = adview.get(period), lead.get(period)
@@ -727,21 +730,32 @@ def _search_funnel_marimekko(grain, plat, periods=5):
             ["Ad view only", max(a - l, 0)],
             ["Sent a reply", l],
         ]})
+    return cols
+
+
+def _search_funnel_marimekko(grain, periods=5):
+    """Funnel composition over the last N full periods as a marimekko: column
+    width = that period's avg daily search users, segments = the mutually
+    exclusive engagement split (searched only / ad view only / replied),
+    which sums exactly to search users — unlike the nested funnel stages."""
+    cols = _mekko_cols(grain, periods=periods)
     if len(cols) < 2:
         return None
+    pdata = {p: c for p in SEARCH_PLATFORMS
+             if (c := _mekko_cols(grain, "platform", p, periods))}
     trino_meta = data.meta().get("search_trino") or {}
     extracted = (trino_meta.get("extracted_at_utc") or "")[:10]
     word = GRAIN_WORD[grain]
     note = ("Column width = that %s's avg daily search users; segments are "
             "exclusive (they sum to all search users). " % word
-            + AVG_DAILY_NOTE + " "
-            + (plat + " only, all methods." if plat else
-               "All platforms and methods.")
+            + AVG_DAILY_NOTE + " All platforms and methods."
             + (" Search data extracted %s." % extracted if extracted else ""))
     return {"kind": "marimekko",
             "title": "Search funnel by %s — last %d %ss"
                      % (word, len(cols), word),
-            "cols": cols, "note": note, "info": info("search_users")}
+            "cols": cols, "note": note, "info": info("search_users"),
+            "pfilter": {"mode": "mekko", "platforms": list(pdata),
+                        "data": pdata, "approx": True}}
 
 
 FILTER_DEPTHS = ["No filters", "1 filter", "2 filters", "3+ filters"]
@@ -842,30 +856,25 @@ def _search_cat_matrix(plat="", months=13, top_n=12):
             "info": info("search_searches")}
 
 
-def _search_region_map(plat=""):
-    if plat:
-        hp = HYDRA_PLAT[plat]
-        period = data.latest_full_period("search_serp", "monthly",
-                                         "platform|region")
-        if period is None:
-            return None
-        _, prows = data.breakdown("search_serp", "platform|region",
-                                  period=period, top_n=100)
-        rows = [[n.split(data.PAIR_SEP, 1)[1], v] for n, v in prows
-                if n.startswith(hp + data.PAIR_SEP)]
-        title = "Keyword SERP views by region (%s) — %s" % (hp, period)
-        plat_note = ("Clickstream tracks web as one platform (desktop + "
-                     "mobile combined). " if hp == "Web" else "")
-    else:
-        period, rows = data.breakdown("search_serp", "region", top_n=20)
-        title = "Keyword SERP views by region — %s" % period
-        plat_note = "All platforms. "
+def _search_region_map():
+    period, rows = data.breakdown("search_serp", "region", top_n=20)
     if not rows:
         return None
-    return {"kind": "map", "title": title, "rows": rows,
+    _, prows = data.breakdown("search_serp", "platform|region",
+                              period=period, top_n=200)
+    pdata = {}
+    for n, v in prows:
+        if data.PAIR_SEP in n:
+            hp, region = n.split(data.PAIR_SEP, 1)
+            pdata.setdefault(hp, []).append([region, v])
+    return {"kind": "map", "title": "Keyword SERP views by region — " + period,
+            "rows": rows,
             "note": "First-page keyword searches from clickstream (additive "
-                    "event counts). " + plat_note + "Fixed monthly view.",
-            "info": info("search_serp")}
+                    "event counts). Clickstream tracks web as one platform. "
+                    "Fixed monthly view.",
+            "info": info("search_serp"),
+            "pfilter": {"mode": "map", "platforms": sorted(pdata),
+                        "data": pdata, "approx": False}}
 
 
 def _search_zsr_region_bars():
@@ -973,29 +982,42 @@ def _method_volume_stacked(grain, methods, plat=""):
             "series": series, "info": info("search_volume")}
 
 
+def _with_pf(chart, mode, pdata, approx=False):
+    """Attach a client-side platform filter payload to a chart spec."""
+    if chart is None or not pdata:
+        return chart
+    if mode in ("lines", "sum_series"):   # nested: {base: {platform: pts}}
+        present = set().union(*(d.keys() for d in pdata.values()))
+    else:                                 # flat: {platform: pts/cols/rows}
+        present = set(pdata)
+    platforms = [p for p in SEARCH_PLATFORMS if p in present] \
+        or sorted(present)                # hydra map uses Web/Android/iOS
+    if len(platforms) < 2:
+        return chart
+    chart["pfilter"] = {"mode": mode, "platforms": platforms,
+                        "data": pdata, "approx": approx}
+    return chart
+
+
 def build_search():
-    plat, g = _search_ctx()
+    g = _search_ctx()
     word = GRAIN_WORD[g]
     android_zsr = _slice_ratio("search_zsr", "search_serp", "monthly",
                                "platform", "Android")
-    psfx = " — %s" % plat if plat else ""
     cards = [
-        _s_card("Search users / day" + psfx, _psl("search_users", g, plat), g,
+        _s_card("Search users / day", data.series_at("search_users", g), g,
                 info_key="search_users"),
         _s_card("Searches per search user",
-                _ratio_points(_psl("search_volume", g, plat),
-                              _psl("search_users", g, plat), as_pct=False),
+                data.ratio_at("search_volume", "search_users", g, as_pct=False),
                 g, info_key="search_volume"),
-        _s_card("Search → ad view", _psl("search_ssu_adview", g, plat), g,
+        _s_card("Search → ad view", data.series_at("search_ssu_adview", g), g,
                 fmt="pct", info_key="search_ssu_adview"),
-        _s_card("Search → reply", _psl("search_ssu_lead", g, plat), g,
+        _s_card("Search → reply", data.series_at("search_ssu_lead", g), g,
                 fmt="pct", info_key="search_ssu_lead"),
         _s_card("Zero-result rate", android_zsr, "monthly", fmt="pct",
                 badge="Android only", info_key="search_zsr"),
-        _s_card("Searches / day (events)",
-                data.daily("search_searches", *(("platform", plat) if plat
-                                                else ("total", data.TOTAL))),
-                "daily", badge=plat or None, info_key="search_searches"),
+        _s_card("Searches / day (events)", data.daily("search_searches"),
+                "daily", info_key="search_searches"),
     ]
 
     platforms = data.dim_values("search_users", "platform", top_n=4)
@@ -1004,58 +1026,67 @@ def build_search():
     def section(title):
         return {"kind": "section", "title": title}
 
-    def m_series(metric, method):
-        return {"label": method, "points": _psl(metric, g, plat, method=method)}
-
+    users_pp = _pp("search_users", g)
     charts = [
-        section("Funnel" + psfx),
-        _search_funnel_marimekko(g, plat),
-        _s_line("Funnel conversion trend",
-                [{"label": "Search → ad view",
-                  "points": _psl("search_ssu_adview", g, plat)},
-                 {"label": "Search → reply",
-                  "points": _psl("search_ssu_lead", g, plat)}],
-                g, pct=True, info_key="search_ssu_adview",
-                note="Unweighted average of daily ratios per %s." % word),
+        section("Funnel"),
+        _search_funnel_marimekko(g),
+        _with_pf(
+            _s_line("Funnel conversion trend",
+                    [{"label": "Search → ad view",
+                      "points": data.series_at("search_ssu_adview", g)},
+                     {"label": "Search → reply",
+                      "points": data.series_at("search_ssu_lead", g)}],
+                    g, pct=True, info_key="search_ssu_adview",
+                    note="Unweighted average of daily ratios per %s." % word),
+            "lines", {"Search → ad view": _pp("search_ssu_adview", g),
+                      "Search → reply": _pp("search_ssu_lead", g)}),
         section("Trends & platforms"),
-        (_s_line("Search users — " + plat,
-                 [{"label": plat, "points": _psl("search_users", g, plat)}],
-                 g, note=AVG_DAILY_NOTE, info_key="search_users")
-         if plat else
-         _s_line("Search users by platform",
-                 [{"label": p,
-                   "points": data.series_at("search_users", g, "platform", p)}
-                  for p in platforms],
-                 g, note=AVG_DAILY_NOTE, info_key="search_users")),
-        None if plat else _platform_share_area(g),
-        _s_line("Search volume" + psfx,
-                [{"label": "Searches", "points": _psl("search_volume", g, plat)}],
-                g, area=True, note=AVG_DAILY_NOTE, info_key="search_volume"),
-        section("Method mix — keyword vs browsing" + psfx),
-        _method_volume_stacked(g, methods, plat),
-        _s_line("Method share of platform searchers",
-                [m_series("search_share_on_platform", m) for m in methods],
-                g, pct=True, info_key="search_share_on_platform",
-                note="Users can use both methods in a day, so shares can sum "
-                     "past 100%."),
-        _s_line("Keyword vs browsing searches (90d)",
-                [{"label": m,
-                  "points": data.daily("search_searches", "platform|method",
-                                       plat + data.PAIR_SEP + m) if plat
-                  else data.daily("search_searches", "method", m)}
-                 for m in methods],
-                "daily", note="True daily event totals."
-                              + (" %s only." % plat if plat else ""),
-                info_key="search_searches"),
+        _with_pf(
+            _s_line("Search users by platform",
+                    [{"label": p, "points": users_pp[p]}
+                     for p in platforms if p in users_pp],
+                    g, note=AVG_DAILY_NOTE, info_key="search_users"),
+            "lines", {"": users_pp}),
+        _with_pf(_platform_share_area(g), "mix", users_pp),
+        _with_pf(
+            _s_line("Search volume",
+                    [{"label": "Searches",
+                      "points": data.series_at("search_volume", g)}],
+                    g, area=True, note=AVG_DAILY_NOTE, info_key="search_volume"),
+            "sum", _pp("search_volume", g)),
+        section("Method mix — keyword vs browsing"),
+        _with_pf(_method_volume_stacked(g, methods),
+                 "sum_series",
+                 {m: _pp("search_volume", g, method=m) for m in methods}),
+        _with_pf(
+            _s_line("Method share of platform searchers",
+                    [{"label": m,
+                      "points": data.series_at("search_share_on_platform", g,
+                                               "method", m)}
+                     for m in methods],
+                    g, pct=True, info_key="search_share_on_platform",
+                    note="Users can use both methods in a day, so shares can "
+                         "sum past 100%."),
+            "lines",
+            {m: _pp("search_share_on_platform", g, method=m) for m in methods}),
+        _with_pf(
+            _s_line("Keyword vs browsing searches (90d)",
+                    [{"label": m,
+                      "points": data.daily("search_searches", "method", m)}
+                     for m in methods],
+                    "daily", note="True daily event totals.",
+                    info_key="search_searches"),
+            "sum_series",
+            {m: _pp("search_searches", "daily", method=m) for m in methods}),
         section("How searches are narrowed"),
-        _filter_depth_stacked(plat),
-        _filter_type_bars(plat),
-        _filter_depth_results_bars(plat),
+        _filter_depth_stacked(),
+        _filter_type_bars(),
+        _filter_depth_results_bars(),
         section("Categories"),
-        _search_treemap(plat),
-        _search_cat_matrix(plat),
+        _search_treemap(),
+        _search_cat_matrix(),
         section("Regions & zero results"),
-        _search_region_map(plat),
+        _search_region_map(),
         _search_zsr_region_bars(),
         _s_line("Zero-result rate trend (Android)",
                 [{"label": "Android ZSR", "points": _slice_ratio(
@@ -1063,7 +1094,7 @@ def build_search():
                 "daily", pct=True, note=ZSR_PLATFORM_NOTE, info_key="search_zsr"),
     ]
     return {"cards": cards, "charts": charts,
-            "controls": _search_controls(plat, g)}
+            "controls": _search_controls(g)}
 
 
 def build_search_keywords():

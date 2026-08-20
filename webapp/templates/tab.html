@@ -86,11 +86,6 @@ window.CATEGORY_TREE = {{ category_tree | tojson }};
 
 {% if page.controls %}
 <div class="page-controls">
-  <span class="pc-chips">
-    {% for p in page.controls.platforms %}
-    <a class="pc-chip {{ 'active' if p.active }}" href="{{ p.url }}">{{ p.label }}</a>
-    {% endfor %}
-  </span>
   <span class="grain-toggle">
     {% for gr in page.controls.grains %}
     <a href="{{ gr.url }}" class="{{ 'active' if gr.active }}">{{ gr.label }}</a>
