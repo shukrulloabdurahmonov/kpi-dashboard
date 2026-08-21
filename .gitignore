@@ -16,3 +16,4 @@ nohup.out
 
 # raw clickstream extracts (contain IPs, device/user/session ids)
 reports/hydra_samples_*.csv
+reports/keywords_all_*.csv
