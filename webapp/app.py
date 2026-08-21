@@ -48,11 +48,13 @@ SEARCH_TABS = [
     ("search_ctr", "/search/ctr", "CTR & success"),
     ("search_keywords", "/search/keywords", "Keywords"),
     ("search_methodology", "/search/methodology", "Methodology"),
+    ("search_deepdive", "/search/deepdive", "Source deep dive"),
     ("search_definitions", "/search/definitions", "Definitions"),
 ]
 
 # tabs with hand-written routes, skipped by the render_tab registration loop
-HAND_ROUTED = {"dictionary", "player", "search_methodology", "search_definitions"}
+HAND_ROUTED = {"dictionary", "player", "search_methodology", "search_deepdive",
+               "search_definitions"}
 
 JIRA_REQUEST_URL = (
     "https://tteam.atlassian.net/jira/software/projects/AN/list"
@@ -1806,6 +1808,23 @@ def create_app():
             "dictionary.html", tabs=TABS, active="dictionary", entries=entries,
             built_at=built, age_hours=age_h, freshness=level,
             dash_title=KPI_DASH_TITLE,
+        )
+
+    @app.route("/search/deepdive")
+    def search_deepdive():
+        built, age_h, level = data.freshness() if data.available() else (None, None, "missing")
+        sqls = []
+        sql_dir = (Path(__file__).resolve().parent.parent
+                   / "sql" / "search" / "tableau")
+        try:
+            for f in sorted(sql_dir.glob("*.sql")):
+                sqls.append({"name": f.name, "text": f.read_text()})
+        except OSError:
+            pass
+        return render_template(
+            "search_deepdive.html", tabs=SEARCH_TABS, active="search_deepdive",
+            built_at=built, age_hours=age_h, freshness=level,
+            dash_title=SEARCH_DASH_TITLE, sqls=sqls,
         )
 
     @app.route("/search/definitions")

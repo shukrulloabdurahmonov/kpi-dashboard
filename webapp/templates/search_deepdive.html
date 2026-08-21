@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="method">
+<h2 class="dict-title">Source deep dive — the search KPI tables</h2>
+<p class="dict-intro">
+  Findings from the 2026-08-19 investigation into how OLX's search KPI pipeline
+  is built, why Uzbekistan was missing from it, and how the UZ numbers on this
+  dashboard were reconstructed. The four original Tableau queries are at the
+  bottom, exactly as written. Reference: <code>Scripts/uz_search_kpis/</code>
+  (<code>README.md</code> + <code>TABLES.md</code>, vendored into this repo
+  under <code>sql/search/tableau/</code>).
+</p>
+
+<section>
+  <h3>The gap: UZ was missing, but only from the finished table</h3>
+  <ul>
+    <li>The production weekly table
+      <code>odyn_search_and_ad_ranking.weekly_search_kpis_tableau</code> —
+      the one the search KPI dashboards are built on — contains
+      <strong>only BG, PL, PT, RO and UA. No Uzbekistan.</strong></li>
+    <li>Its <em>daily precursors</em> however
+      (<code>daily_search_users_kpis</code> + <code>daily_search_volume_kpis</code>)
+      <strong>do contain Uzbekistan and Kazakhstan</strong>, with full history
+      from <strong>2024-12-28</strong> — the UZ data existed all along, it just
+      never got rolled up.</li>
+    <li>So we built an <strong>exact 29-column replica</strong> of the
+      production weekly table for UZ from those daily tables
+      (<code>1_weekly_search_kpis.sql</code> below) — a drop-in Tableau
+      replacement.</li>
+    <li><strong>Validated cell-perfect against production for Poland</strong>:
+      2 weeks × 15 rows × 24 metrics, every value matched. That is what makes
+      the replica trustworthy — the same query run against a country the
+      production table does cover reproduces it exactly.</li>
+  </ul>
+</section>
+
+<section>
+  <h3>Reverse-engineered semantics (why the numbers look the way they do)</h3>
+  <ul>
+    <li><code>users_*</code> / <code>volume_*</code> are
+      <strong>average daily values</strong> — <code>floor(sum ÷ days_in_week)</code>
+      — <em>not</em> weekly totals and not distinct users over the week. This
+      is the single most misread property of the whole dataset, and the reason
+      every averaged chart on this dashboard says so in its title.</li>
+    <li><code>ssu_*</code> and <code>avg_*_su</code> are
+      <strong>unweighted averages of the daily ratios</strong>, rounded to
+      5 dp — not period ratios.</li>
+    <li><code>funnel_stage_adview_pct</code> = <code>ssu_adview</code>;
+      <code>funnel_stage_reply_pct</code> = <code>ssu_lead</code>. The
+      funnel columns are just the conversion ratios under another name.</li>
+    <li><code>funnel_stage_method_share_of_search</code> = ratio of the
+      floored weekly user counts (method ÷ All), NULL on
+      <code>search_method = 'All'</code> rows;
+      <code>funnel_stage_search_pct</code> / <code>_platform_pct</code> = 1.0
+      on the All rows, NULL otherwise.</li>
+    <li>Week fields are <strong>ISO</strong>
+      (<code>year_of_week()</code> / <code>week()</code>), weeks start Monday,
+      <code>week_label = 'W' || lpad(week, 2, '0')</code>.</li>
+    <li>The <code>All</code> rows are <strong>deduplicated rollups, not sums</strong>
+      of the detail rows — one user can appear under both Keyword and Browsing.</li>
+  </ul>
+</section>
+
+<section>
+  <h3>Conventions that bite</h3>
+  <ul>
+    <li><strong>Country encoding differs by table.</strong>
+      <code>daily_search_users_kpis</code> / <code>daily_search_volume_kpis</code>
+      use full names (<code>'Uzbekistan'</code>);
+      <code>daily_user_searches</code> uses ISO codes (<code>'UZ'</code>) —
+      and there <code>country</code> is a <strong>partition key</strong>, so
+      always filter it (it prunes 6/7 of the scan).</li>
+    <li><strong>TGV is not tracked for UZ or KZ</strong> — every
+      <code>*_tgv</code> column is legitimately 0, which is why this dashboard
+      drops them entirely rather than charting flat zeros.</li>
+    <li><strong>Category joins</strong> go through
+      <code>bi_dim_categories</code> on <code>category_nk</code> +
+      <code>site_sk = 'olx|eu|uz'</code> (923 rows), joined at the deepest
+      available level (L3 → L2 → L1). <code>category_nk = '-1'</code> is
+      Unknown; a NULL after the left join means "no resolvable category".</li>
+    <li>Kazakhstan is available in the same tables
+      (<code>'Kazakhstan'</code> / <code>'KZ'</code>) if this ever needs to
+      cover KZ.</li>
+    <li>These queries aggregate ~600 days per refresh — use Tableau
+      <strong>extracts</strong> on a schedule, not live connections.</li>
+  </ul>
+</section>
+
+<section>
+  <h3>⚠️ Two traps to avoid</h3>
+  <ul>
+    <li><strong>Do not build on
+      <code>odyn_search_and_ad_ranking.fact_search_events</code>.</strong> It
+      looks ideal (one row per listing event with <code>has_adview</code> /
+      <code>has_lead</code> / <code>has_tgv</code>) but contains
+      <strong>a single day — 2026-06-01 — for all countries</strong>. It is a
+      test snapshot, not a table.</li>
+    <li><strong>Do not roll up <code>daily_user_searches</code> into user
+      counts.</strong> Its grain is platform × keyword × category × session,
+      so a session appears in many rows: naive rollups
+      <strong>overcount users ~3.5× and searches ~7×</strong>. Use the
+      pre-aggregated KPI tables for user counts.</li>
+  </ul>
+</section>
+
+<section>
+  <h3>UZ scale check (week of 2026-08-03)</h3>
+  <ul>
+    <li>≈ <strong>353K average daily search users</strong></li>
+    <li><code>ssu_adview</code> ≈ <strong>73%</strong> of search users reached
+      an ad view; <code>ssu_lead</code> ≈ <strong>8.4%</strong> sent a
+      reply</li>
+    <li>Category split (finance L2, via <code>dim_categories</code>,
+      <code>site_sk = 'olx|eu|uz'</code>):
+      <strong>For sale &gt; No category &gt; Motors &gt; Real estate &gt;
+      Jobs &gt; Services</strong></li>
+  </ul>
+  <p class="dict-intro">These figures are the sanity baseline: the Search
+    volume and Search users tabs should land in the same neighbourhood, and
+    they do — a useful check after any pipeline change.</p>
+</section>
+
+<section>
+  <h3>The four original Tableau queries</h3>
+  <p class="dict-intro">Ready to paste into Tableau as <em>New Custom SQL</em>
+    (Trino, <code>presto.data.olx.org</code>; no trailing semicolons). These
+    are the source material this dashboard's own extraction was adapted from —
+    the adapted, parameterized versions are on the Methodology tab.</p>
+  {% for q in sqls %}
+  <details class="sql-file"><summary><code>{{ q.name }}</code></summary>
+    <pre><code>{{ q.text }}</code></pre>
+  </details>
+  {% endfor %}
+</section>
+</div>
+{% endblock %}
