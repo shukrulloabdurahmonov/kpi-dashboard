@@ -829,3 +829,6 @@ body.has-fullscreen { overflow: hidden; }
 
 /* Trino-rollup-sourced charts: thin green border = validated production source */
 .chart-card.trusted { border: 1px solid var(--fresh-green); }
+.raw-ex { font-size: 11.5px; }
+.raw-ex td, .raw-ex th { white-space: nowrap; padding: 4px 7px; }
+.raw-ex td.null { color: var(--muted); text-align: center; }

@@ -121,6 +121,65 @@
 </section>
 
 <section>
+  <h3>Raw event examples (2026-08-20)</h3>
+  <p class="dict-intro">Real rows from the three hydra tables, one per row
+    type per platform, so the logging conventions can be compared side by
+    side. <strong>Identifier columns are omitted</strong> (IP, user, device,
+    session and ad ids) — the full-column extracts live on the analyst's
+    machine, not in this repo or dashboard.</p>
+  <div class="dict-wrap">
+  <table class="dict raw-ex">
+    <thead><tr>
+      <th>table</th><th>row type</th><th>eventname</th><th>trackpage</th>
+      <th>page_nb</th><th>keyword</th><th>result_count</th>
+      <th>filters_count</th><th>cat_l1_id</th><th>region_id</th>
+      <th>ad_position</th><th>user_agent</th>
+    </tr></thead>
+    <tbody>
+      <tr><td><code>web</code></td><td>keyword_search</td><td><code>listing</code></td><td><code>listing</code></td><td class="null">∅</td><td><code>Двери пластиковые</code></td><td><code>290.0</code></td><td><code>1.0</code></td><td><code>899</code></td><td class="null">∅</td><td><code>[1,10]</code></td><td><code>Mozilla/5.0 (Linux; Android 10; K)…</code></td></tr>
+      <tr><td><code>web</code></td><td>zero_result_search</td><td><code>listing</code></td><td><code>listing</code></td><td class="null">∅</td><td><code>seul mun</code></td><td><code>0.0</code></td><td><code>3.0</code></td><td><code>1</code></td><td class="null">∅</td><td><code>[1,40]</code></td><td><code>Mozilla/5.0 (Windows NT 10.0; Win6…</code></td></tr>
+      <tr><td><code>web</code></td><td>low_supply_search</td><td><code>listing</code></td><td><code>listing</code></td><td><code>1.0</code></td><td><code>laborant</code></td><td><code>10.0</code></td><td><code>2.0</code></td><td><code>6</code></td><td><code>5.0</code></td><td><code>[1,10]</code></td><td><code>Mozilla/5.0 (Linux; Android 10; K)…</code></td></tr>
+      <tr><td><code>web</code></td><td>navigation_browse</td><td><code>listing</code></td><td><code>listing</code></td><td><code>1.0</code></td><td class="null">∅</td><td><code>1000.0</code></td><td><code>1.0</code></td><td class="null">∅</td><td><code>33.0</code></td><td><code>[1,10]</code></td><td><code>Mozilla/5.0 (Linux; Android 10; K)…</code></td></tr>
+      <tr><td><code>web</code></td><td>ad_click</td><td><code>ad_click</code></td><td class="null">∅</td><td class="null">∅</td><td><code>ижарага квартира  яккасарой тумани</code></td><td><code>51.0</code></td><td><code>1.0</code></td><td><code>1</code></td><td class="null">∅</td><td><code>[1,10]</code></td><td><code>Mozilla/5.0 (Linux; Android 10; K)…</code></td></tr>
+      <tr><td><code>android</code></td><td>keyword_search</td><td class="null">∅</td><td><code>listing</code></td><td><code>1.0</code></td><td><code>rus tili kurslari</code></td><td><code>68</code></td><td><code>1.0</code></td><td class="null">∅</td><td><code>5</code></td><td><code>[1:10]</code></td><td><code>Dalvik/2.1.0 (Linux; U; Android 11…</code></td></tr>
+      <tr><td><code>android</code></td><td>zero_result_search</td><td class="null">∅</td><td><code>listing</code></td><td><code>1.0</code></td><td><code>ассенизатор</code></td><td><code>0</code></td><td><code>1.0</code></td><td><code>7.0</code></td><td class="null">∅</td><td><code>[1:10]</code></td><td><code>Dalvik/2.1.0 (Linux; U; Android 15…</code></td></tr>
+      <tr><td><code>android</code></td><td>low_supply_search</td><td class="null">∅</td><td><code>listing</code></td><td><code>1.0</code></td><td><code>айфон</code></td><td><code>6</code></td><td><code>1.0</code></td><td class="null">∅</td><td><code>5</code></td><td><code>[9:18]</code></td><td><code>Dalvik/2.1.0 (Linux; U; Android 13…</code></td></tr>
+      <tr><td><code>android</code></td><td>navigation_browse</td><td class="null">∅</td><td><code>listing</code></td><td><code>1.0</code></td><td class="null">∅</td><td><code>433</code></td><td><code>3.0</code></td><td><code>3.0</code></td><td><code>5</code></td><td><code>[1:10]</code></td><td><code>Dalvik/2.1.0 (Linux; U; Android 12…</code></td></tr>
+      <tr><td><code>android</code></td><td>ad_click</td><td><code>ad_click</code></td><td class="null">∅</td><td class="null">∅</td><td class="null">∅</td><td><code>0</code></td><td class="null">∅</td><td><code>899.0</code></td><td><code>5</code></td><td><code>1</code></td><td><code>Dalvik/2.1.0 (Linux; U; Android 10…</code></td></tr>
+      <tr><td><code>ios</code></td><td>keyword_search</td><td class="null">∅</td><td><code>listing</code></td><td><code>1.0</code></td><td><code>porsche taycan</code></td><td><code>19.0</code></td><td><code>1.0</code></td><td class="null">∅</td><td class="null">∅</td><td><code>[1:10]</code></td><td><code>OLX.uz/0 CFNetwork/3860.700.1 Darw…</code></td></tr>
+      <tr><td><code>ios</code></td><td>zero_result_search</td><td class="null">∅</td><td><code>listing</code></td><td><code>1.0</code></td><td><code>modellikka ishga olamiz</code></td><td><code>0.0</code></td><td><code>1.0</code></td><td><code>6</code></td><td class="null">∅</td><td><code>[1:3]</code></td><td><code>OLX.uz/19422 CFNetwork/3860.700.1 …</code></td></tr>
+      <tr><td><code>ios</code></td><td>low_supply_search</td><td class="null">∅</td><td><code>listing</code></td><td><code>1.0</code></td><td><code>Hp keyboard 650</code></td><td><code>3.0</code></td><td><code>0.0</code></td><td class="null">∅</td><td class="null">∅</td><td><code>[1:3]</code></td><td><code>OLX.uz/0 CFNetwork/3826.600.41.2.1…</code></td></tr>
+      <tr><td><code>ios</code></td><td>navigation_browse</td><td class="null">∅</td><td><code>listing</code></td><td><code>1.0</code></td><td class="null">∅</td><td><code>1000.0</code></td><td><code>1.0</code></td><td><code>899</code></td><td class="null">∅</td><td><code>[1:10]</code></td><td><code>OLX.uz/0 CFNetwork/3860.700.1 Darw…</code></td></tr>
+      <tr><td><code>ios</code></td><td>ad_click</td><td><code>ad_click</code></td><td class="null">∅</td><td><code>1.0</code></td><td><code>Byd Xan</code></td><td><code>155.0</code></td><td><code>1.0</code></td><td><code>3</code></td><td><code>5</code></td><td><code>1</code></td><td><code>OLX.uz/0 CFNetwork/3860.600.12 Dar…</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="dict-intro">How to read these:</p>
+  <ul>
+    <li><strong>The convention split is visible in columns 3–4:</strong> web
+      fills <code>eventname = 'listing'</code>, while android/iOS leave
+      <code>eventname</code> empty (∅) and identify the screen in
+      <code>trackpage</code>. A search needs the results screen
+      <em>plus</em> a keyword — the <code>navigation_browse</code> rows are the
+      same screen with no keyword, i.e. category browsing.</li>
+    <li><strong><code>result_count</code> is the classifier:</strong> 0 →
+      zero-result, 1–10 → low-supply, anything else → a normal search. It is
+      the count the app itself rendered.</li>
+    <li><strong><code>page_nb</code> is often empty on web</strong> — hence
+      every query uses <code>COALESCE(page_nb, 1) = 1</code> to keep first
+      pages only.</li>
+    <li><strong>Two per-platform quirks visible here:</strong> on web page
+      views <code>ad_position</code> holds the <em>range of positions
+      rendered</em> (e.g. <code>[1,10]</code>) rather than a single rank —
+      only <code>ad_click</code> rows carry a scalar position, which is why
+      the CTR extraction keys on <code>ad_position IS NOT NULL</code> on click
+      events. And the category id columns differ in shape per platform, so
+      category work goes through the dimension join rather than these
+      ids directly.</li>
+  </ul>
+</section>
+
+<section>
   <h3>The four original Tableau queries</h3>
   <p class="dict-intro">Ready to paste into Tableau as <em>New Custom SQL</em>
     (Trino, <code>presto.data.olx.org</code>; no trailing semicolons). These
