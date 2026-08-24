@@ -1014,7 +1014,12 @@ def _search_totals_chart():
              "note": "True totals of search events by platform — unlike the "
                      "avg-daily charts, these grow with the period. Platforms "
                      "stack exactly (each event has one platform). Current "
-                     "partial period excluded.",
+                     "partial period excluded. Trino's definition is broad: "
+                     "every result-page view, keyword AND category browsing "
+                     "(~38% of it), with pagination counted again and no bot "
+                     "filter — roughly 4× the bot-filtered first-page keyword "
+                     "searches behind the Zero results tab. Never compare the "
+                     "two sources' volumes.",
              "info": info("search_searches")}
     return _with_grains(chart, variant, grains=("daily", "monthly"),
                         default="monthly")
