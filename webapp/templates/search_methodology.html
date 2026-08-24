@@ -147,6 +147,46 @@
 </section>
 
 <section>
+  <h3>Cross-validation of the two sources (July 2026)</h3>
+  <p>
+    The clickstream search definition above was checked against source 1 on
+    identical terms — all keyword result-page views, no filters — and the two
+    independent pipelines <strong>agree to 0.02%</strong>:
+  </p>
+  <div class="dict-wrap">
+  <table class="dict">
+    <thead><tr><th>Definition</th><th>July 2026 searches</th><th>Removed by</th></tr></thead>
+    <tbody>
+      <tr><td>Trino rollup, keyword method</td>
+          <td><code>108,611,608</code></td><td>—</td></tr>
+      <tr><td>Clickstream, all keyword result-page views</td>
+          <td><code>108,587,250</code></td>
+          <td>0.02% below Trino — definitions match</td></tr>
+      <tr><td>… first page only (<code>page_nb = 1</code>)</td>
+          <td><code>42,198,670</code></td>
+          <td><strong>−61.1% pagination</strong></td></tr>
+      <tr><td>… bots removed</td>
+          <td><code>41,751,260</code></td><td>−1.1% bots</td></tr>
+      <tr><td>… valid <code>result_count</code> (what this dashboard uses)</td>
+          <td><code>41,751,260</code></td><td>−0% (always populated)</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <ul>
+    <li><strong>Pagination is the entire gap</strong> between the two sources'
+      headline volumes — and it is platform-shaped: 69% of Android keyword
+      events and 74% of iOS ones are page 2+ (infinite scroll fires an event
+      per loaded page), against only 16% on web.</li>
+    <li>Consequence: <em>page-view</em> volume questions want source 1's
+      numbers; <em>search-quality</em> questions (zero results, CTR, success
+      rate) want the first-page counts, where one search is one search.</li>
+    <li>The bot filter turns out to matter little for volume (1.1%), and the
+      sentinel/NULL <code>result_count</code> guard removes nothing at all —
+      it stays in the queries as protection, not as a correction.</li>
+  </ul>
+</section>
+
+<section>
   <h3>Refresh &amp; retention</h3>
   <ul>
     <li>Extraction runs on a scheduled machine with warehouse + Trino access
