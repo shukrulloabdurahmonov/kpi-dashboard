@@ -1,0 +1,356 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+  /* Search-unit simulator — scoped under .sim; colours ride on the site tokens. */
+  .sim { max-width: 1040px; margin: 0 auto; padding: 24px 20px 56px; display: grid; gap: 24px;
+         --olx: var(--series-3); --olx-soft: rgba(27, 175, 122, 0.14);
+         --alt: var(--series-7); --alt-soft: rgba(74, 58, 167, 0.14);
+         --zero: var(--baseline); --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  .sim h2.dict-title { margin: 0 0 6px; }
+  .sim p.dict-intro { margin: 0; max-width: 64ch; }
+  .sim .frame { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px 16px;
+                display: grid; grid-template-columns: minmax(150px, 0.55fr) 1fr 1fr; gap: 16px; align-items: stretch; }
+  .sim .sess { display: grid; align-content: start; gap: 4px; padding: 6px 6px 0 4px; position: relative; }
+  .sim .label { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); }
+  .sim .value { font-family: var(--mono); font-size: 56px; font-weight: 500; line-height: 1.05; font-variant-numeric: tabular-nums; }
+  .sim .sess .value { color: var(--ink-2); }
+  .sim .def { color: var(--muted); font-size: 13px; }
+  .sim .def b { color: var(--ink-2); font-weight: 500; }
+  .sim .counter { background: var(--page); border: 1px solid var(--border); border-radius: 10px; padding: 20px 22px;
+                  display: grid; gap: 4px; position: relative; overflow: hidden; }
+  .sim .counter::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 6px; }
+  .sim .counter.olx::before { background: var(--olx); }
+  .sim .counter.alt::before { background: var(--alt); }
+  .sim .counter.olx .value { color: var(--olx); }
+  .sim .counter.alt .value { color: var(--alt); }
+  .sim .bump { position: absolute; right: 18px; top: 16px; font-family: var(--mono); font-size: 22px; font-weight: 500; opacity: 0; }
+  .sim .sess .bump { right: 6px; top: 4px; color: var(--ink-2); }
+  .sim .counter.olx .bump { color: var(--olx); } .sim .counter.alt .bump { color: var(--alt); }
+  .sim .bump.zero { color: var(--zero) !important; }
+  .sim .bump.show { animation: simbump 900ms ease-out; }
+  @keyframes simbump { 0% { opacity: 0; transform: translateY(8px);} 20% { opacity: 1; transform: translateY(0);} 100% { opacity: 0; transform: translateY(-10px);} }
+  .sim .bar { display: flex; justify-content: flex-end; gap: 8px; margin-top: -14px; }
+  .sim .ghost, .sim .reset { font: inherit; font-size: 13px; background: var(--surface); border: 1px solid var(--border); color: var(--ink-2);
+                             border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .sim .ghost:hover, .sim .reset:hover { border-color: var(--muted); color: var(--ink); }
+  .sim .state { display: flex; flex-wrap: wrap; gap: 8px 22px; align-items: baseline; font-family: var(--mono); font-size: 13px; color: var(--ink-2);
+                background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; }
+  .sim .state b { color: var(--ink); font-weight: 500; }
+  .sim .main { display: grid; grid-template-columns: 1.15fr 1fr; gap: 20px; align-items: start; }
+  .sim .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; }
+  .sim .panel h3 { font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); margin: 0 0 12px; }
+  .sim .group + .group { margin-top: 18px; }
+  .sim .group h4 { font-size: 13px; font-weight: 500; color: var(--muted); margin: 0 0 8px; }
+  .sim .actions { display: grid; gap: 8px; }
+  .sim button.act { font: inherit; text-align: left; cursor: pointer; border: 1px solid var(--border); background: var(--page); color: var(--ink);
+                    border-radius: 8px; padding: 10px 12px; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; }
+  .sim button.act:hover:not(:disabled) { border-color: var(--muted); }
+  .sim button.act:focus-visible, .sim .ghost:focus-visible, .sim .reset:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .sim button.act:disabled { opacity: 0.45; cursor: not-allowed; }
+  .sim button.act .t { font-weight: 500; }
+  .sim button.act .why { grid-column: 1; font-size: 12.5px; color: var(--muted); }
+  .sim button.act .d { grid-row: 1 / span 2; font-family: var(--mono); font-size: 12.5px; white-space: nowrap; display: flex; gap: 8px; }
+  .sim .chip { padding: 1px 7px; border-radius: 999px; font-weight: 500; }
+  .sim .chip.olx { background: var(--olx-soft); color: var(--olx); }
+  .sim .chip.alt { background: var(--alt-soft); color: var(--alt); }
+  .sim .chip.z { background: transparent; color: var(--zero); border: 1px dashed var(--zero); }
+  .sim .reset { margin-top: 14px; }
+  .sim .tape { font-family: var(--mono); font-size: 12.5px; display: grid; max-height: 520px; overflow: auto; }
+  .sim .tape .head, .sim .tape .row { display: grid; grid-template-columns: 26px 1fr 40px 40px; gap: 8px; padding: 6px 4px; align-items: baseline; }
+  .sim .tape .head { padding: 0 4px 6px; color: var(--muted); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; }
+  .sim .tape .head .r, .sim .tape .d { text-align: right; }
+  .sim .tape .row { border-top: 1px solid var(--border); }
+  .sim .tape .n { color: var(--muted); }
+  .sim .tape .what small { display: block; color: var(--muted); }
+  .sim .tape .d { font-variant-numeric: tabular-nums; }
+  .sim .tape .d.olx { color: var(--olx); } .sim .tape .d.alt { color: var(--alt); } .sim .tape .d.z { color: var(--zero); }
+  .sim .tape .sessrow { color: var(--muted); font-size: 11.5px; padding: 8px 4px 2px; letter-spacing: 0.06em; text-transform: uppercase; border-top: 1px dashed var(--border); }
+  .sim .tape .empty { color: var(--muted); padding: 8px 4px; }
+  .sim .ref h3 { font-size: 18px; font-weight: 600; letter-spacing: 0; text-transform: none; margin: 0 0 4px; color: var(--ink); }
+  .sim .ref p { color: var(--ink-2); margin: 0 0 14px; max-width: 70ch; }
+  .sim .tablewrap { overflow-x: auto; }
+  .sim table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 14px; }
+  .sim th, .sim td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .sim th { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); font-weight: 600; }
+  .sim td.c { font-family: var(--mono); font-size: 13px; white-space: nowrap; }
+  .sim td.c.olx { color: var(--olx); } .sim td.c.alt { color: var(--alt); } .sim td.c.z { color: var(--zero); }
+  .sim .oneliners { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+  .sim .oneliners div { border-left: 4px solid; padding: 6px 12px; font-size: 14px; }
+  .sim .oneliners .olx { border-color: var(--olx); } .sim .oneliners .alt { border-color: var(--alt); }
+  @media (max-width: 760px) { .sim .frame, .sim .main, .sim .oneliners { grid-template-columns: 1fr; } .sim .value { font-size: 44px; } }
+  @media (prefers-reduced-motion: reduce) { .sim .bump.show { animation: none; opacity: 1; } }
+</style>
+
+<div class="sim">
+  <div>
+    <h2 class="dict-title">What is a search?</h2>
+    <p class="dict-intro">Two ways of counting the same clicks. Press the actions a user would take and watch how OLX's presto count and the alternative logic diverge. The Search team is asked to pick one — it is the denominator of Successful Searches, CTR 40, CTR@1/@3, ZRR and Searches per session.</p>
+  </div>
+
+  <section class="frame" aria-live="polite">
+    <div class="sess">
+      <span class="label">Sessions</span>
+      <span class="value" id="sessCount">0</span>
+      <span class="def">visits with at least one listing event — <b>the same under both logics</b>; the two counts live inside them</span>
+      <span class="bump" id="sessBump"></span>
+    </div>
+    <div class="counter olx">
+      <span class="label">OLX search count</span>
+      <span class="value" id="olxCount">0</span>
+      <span class="def">one result page rendered = one search</span>
+      <span class="bump" id="olxBump"></span>
+    </div>
+    <div class="counter alt">
+      <span class="label">Alternative logic</span>
+      <span class="value" id="altCount">0</span>
+      <span class="def">one distinct query per session = one search</span>
+      <span class="bump" id="altBump"></span>
+    </div>
+  </section>
+
+  <div class="bar">
+    <button class="ghost" id="resetCounts" title="Zero all counters, clear the tape and the current query">Reset counts</button>
+  </div>
+
+  <div class="state">
+    <span>session <b id="sessNo">1</b></span>
+    <span>query <b id="queryLabel">—</b></span>
+    <span>search_id <b id="sidLabel">—</b></span>
+    <span>page <b id="pageNo">—</b></span>
+  </div>
+
+  <div class="main">
+    <section class="panel">
+      <h3>User actions</h3>
+      <div class="group">
+        <h4>Start — resets the counts</h4>
+        <div class="actions">
+          <button class="act" id="a-query" data-act="query">
+            <span class="t">Run a new query</span>
+            <span class="why">types a keyword or opens a category → new search_id</span>
+            <span class="d"><span class="chip olx">+1</span><span class="chip alt">+1</span></span>
+          </button>
+          <button class="act" id="a-landing" data-act="landing">
+            <span class="t">Land on a listing with no keyword and no category</span>
+            <span class="why">home-feed style listing — OLX files it under “Browsing”</span>
+            <span class="d"><span class="chip olx">+1</span><span class="chip z">0</span></span>
+          </button>
+        </div>
+      </div>
+      <div class="group">
+        <h4>In the same session</h4>
+        <div class="actions">
+          <button class="act" id="a-scroll" data-act="scroll" disabled>
+            <span class="t">Scroll to the next page</span>
+            <span class="why">pagination — same search_id, one more listing event</span>
+            <span class="d"><span class="chip olx">+1</span><span class="chip z">0</span></span>
+          </button>
+          <button class="act" id="a-filter" data-act="filter" disabled>
+            <span class="t">Change a filter, sort, or city</span>
+            <span class="why">parameters change → the hash changes → new search_id</span>
+            <span class="d"><span class="chip olx">+1</span><span class="chip alt">+1</span></span>
+          </button>
+          <button class="act" id="a-retype" data-act="retype" disabled>
+            <span class="t">Retype a different keyword</span>
+            <span class="why">new query → new search_id</span>
+            <span class="d"><span class="chip olx">+1</span><span class="chip alt">+1</span></span>
+          </button>
+          <button class="act" id="a-adback" data-act="adback" disabled>
+            <span class="t">Open an ad and come back</span>
+            <span class="why">results re-render — 12% of Android and 21% of iOS listing views arrive from an ad page — same search_id</span>
+            <span class="d"><span class="chip olx">+1</span><span class="chip z">0</span></span>
+          </button>
+          <button class="act" id="a-view" data-act="view" disabled>
+            <span class="t">Switch grid / list / gallery view</span>
+            <span class="why">the page re-renders, parameters unchanged — same search_id</span>
+            <span class="d"><span class="chip olx">+1</span><span class="chip z">0</span></span>
+          </button>
+          <button class="act" id="a-saved" data-act="saved" disabled>
+            <span class="t">Open a saved search</span>
+            <span class="why">re-runs a stored query — same hash as when it was saved; counts once per session</span>
+            <span class="d"><span class="chip olx">+1</span><span class="chip alt">+1</span></span>
+          </button>
+          <button class="act" id="a-seller" data-act="seller" disabled>
+            <span class="t">Browse a seller's other ads</span>
+            <span class="why">a listing event with a search_id but no keyword and no category</span>
+            <span class="d"><span class="chip olx">+1</span><span class="chip z">0</span></span>
+          </button>
+          <button class="act" id="a-repeat" data-act="repeat" disabled>
+            <span class="t">Run the identical query again</span>
+            <span class="why">same hash, same session — the compromise in the alternative logic</span>
+            <span class="d"><span class="chip olx">+1</span><span class="chip z">0</span></span>
+          </button>
+        </div>
+      </div>
+      <div class="group">
+        <h4>Later</h4>
+        <div class="actions">
+          <button class="act" id="a-tomorrow" data-act="tomorrow" disabled>
+            <span class="t">Come back tomorrow, run the same query</span>
+            <span class="why">new session — same search_id counts again</span>
+            <span class="d"><span class="chip olx">+1</span><span class="chip alt">+1</span></span>
+          </button>
+        </div>
+      </div>
+      <button class="reset" id="reset">Start over</button>
+    </section>
+
+    <section class="panel">
+      <h3>Event tape</h3>
+      <div class="tape" id="tape"></div>
+    </section>
+  </div>
+
+  <section class="panel ref">
+    <h3>The rules behind the counters</h3>
+    <p>OLX's <code>daily_user_searches.searches</code> counts every listing page view. The alternative logic counts distinct <code>(session, search_id)</code> pairs — and <code>search_id</code> is a hash of the query parameters, so identical queries share it.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>user action</th><th>listing events fired</th><th>OLX search count</th><th>alternative logic</th></tr></thead>
+        <tbody>
+          <tr><td>runs a query, sees page 1</td><td>1</td><td class="c olx">1 search</td><td class="c alt">1 search</td></tr>
+          <tr><td>scrolls to page 2, 3, 4</td><td>+3</td><td class="c olx">+3 searches</td><td class="c z">still 1</td></tr>
+          <tr><td>changes a filter, sort, or city</td><td>+1 (new search_id)</td><td class="c olx">+1 search</td><td class="c alt">+1 search</td></tr>
+          <tr><td>retypes a different keyword</td><td>+1 (new search_id)</td><td class="c olx">+1 search</td><td class="c alt">+1 search</td></tr>
+          <tr><td>opens an ad, comes back to the same results</td><td>+1 when the page re-renders (12% of Android and 21% of iOS listing views come from an ad page)</td><td class="c olx">+1 search</td><td class="c z">still 1</td></tr>
+          <tr><td>switches grid / list / gallery view</td><td>+1 (re-render, same search_id)</td><td class="c olx">+1 search</td><td class="c z">still 1</td></tr>
+          <tr><td>opens a saved search</td><td>+1 (the stored hash)</td><td class="c olx">+1 search</td><td class="c alt">+1 search (once per session)</td></tr>
+          <tr><td>browses a seller's other ads</td><td>+1 (search_id, no keyword / category)</td><td class="c olx">+1 search</td><td class="c z">not counted — dropped by the qualifier</td></tr>
+          <tr><td>runs the identical query again later in the same session</td><td>+1</td><td class="c olx">+1 search</td><td class="c z">still 1 (the compromise)</td></tr>
+          <tr><td>runs the identical query tomorrow / after re-opening the app</td><td>+1</td><td class="c olx">+1 search</td><td class="c alt">+1 search</td></tr>
+          <tr><td>lands on a listing with no keyword and no category (home-feed style)</td><td>+1</td><td class="c olx">+1 search (“Browsing”)</td><td class="c z">not counted — dropped by the qualifier</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="oneliners">
+      <div class="olx"><b>OLX:</b> a search is every time a result page is rendered.</div>
+      <div class="alt"><b>Alternative:</b> a search is every distinct query a user issues within a visit.</div>
+    </div>
+  </section>
+</div>
+
+<script>
+(function () {
+  var queries = ["iphone 11", "Транспорт", "arenda kvartira", "rtx 4060", "Недвижимость › Ташкент", "gentra 2020 avtomat", "собака", "индукционная плита"];
+  var filters = ["+ price ≤ 5 000 000", "+ sort: newest", "+ city: Самарканд", "+ condition: new", "+ rooms: 3"];
+  var HEAD = '<div class="head"><span>#</span><span>listing event</span><span class="r">OLX</span><span class="r">alt</span></div>';
+  var S;
+  var el = function (id) { return document.getElementById(id); };
+
+  function hash(str) {
+    var h = 2166136261;
+    for (var i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+    return ("0000000" + h.toString(16).toUpperCase()).slice(-8);
+  }
+  function clearCounts(msg) {
+    S.olx = 0; S.alt = 0; S.sessions = 0; S.session = 1; S.n = 0; S.lastSess = 0;
+    S.query = null; S.sid = null; S.page = null;
+    el("tape").innerHTML = HEAD + '<div class="empty">' + msg + '</div>';
+  }
+  function reset() {
+    S = { qi: 0, fi: 0 };
+    clearCounts("Nothing yet — run a query.");
+    render();
+  }
+  function render() {
+    el("olxCount").textContent = S.olx;
+    el("altCount").textContent = S.alt;
+    el("sessCount").textContent = S.sessions;
+    el("sessNo").textContent = S.session;
+    el("queryLabel").textContent = S.query || "—";
+    el("sidLabel").textContent = S.sid || "—";
+    el("pageNo").textContent = S.page || "—";
+    var has = !!S.query;
+    ["scroll", "filter", "retype", "adback", "view", "saved", "seller", "repeat", "tomorrow"].forEach(function (a) { el("a-" + a).disabled = !has; });
+  }
+  function bump(id, d) {
+    var b = el(id);
+    b.className = "bump" + (d ? "" : " zero");
+    b.textContent = d ? "+" + d : "0";
+    void b.offsetWidth;
+    b.className += " show";
+  }
+  function tape(what, sub, dOlx, dAlt) {
+    var t = el("tape");
+    var e = t.querySelector(".empty"); if (e) e.remove();
+    if (S.lastSess !== S.session) {
+      S.sessions++; bump("sessBump", 1);
+      var s = document.createElement("div"); s.className = "sessrow"; s.textContent = "session " + S.session; t.appendChild(s); S.lastSess = S.session;
+    }
+    S.n++;
+    var r = document.createElement("div"); r.className = "row";
+    r.innerHTML = '<span class="n">' + S.n + '</span><span class="what">' + what + '<small>' + sub + '</small></span>' +
+      '<span class="d ' + (dOlx ? "olx" : "z") + '">' + (dOlx ? "+" + dOlx : "0") + '</span>' +
+      '<span class="d ' + (dAlt ? "alt" : "z") + '">' + (dAlt ? "+" + dAlt : "0") + '</span>';
+    t.appendChild(r); t.scrollTop = t.scrollHeight;
+  }
+  function apply(dOlx, dAlt, what, sub) {
+    S.olx += dOlx; S.alt += dAlt;
+    bump("olxBump", dOlx); bump("altBump", dAlt);
+    tape(what, sub, dOlx, dAlt);
+    render();
+  }
+  function newQuery(label) { S.query = label; S.sid = hash(label); S.page = 1; }
+
+  var acts = {
+    query: function () {
+      clearCounts("");
+      var q = queries[S.qi++ % queries.length];
+      newQuery(q);
+      apply(1, 1, "listing · “" + q + "” page 1", "search_id " + S.sid + " · new query in this session");
+    },
+    landing: function () {
+      clearCounts("");
+      var sid = hash("nokw-nocat-" + S.n);
+      apply(1, 0, "listing · no keyword, no category", "search_id " + sid + " · fails the keyword-or-category qualifier");
+    },
+    scroll: function () {
+      S.page++;
+      apply(1, 0, "listing · “" + S.query + "” page " + S.page, "search_id " + S.sid + " · same pair, pagination");
+    },
+    filter: function () {
+      var f = filters[S.fi++ % filters.length];
+      newQuery(S.query.split(" + ")[0] + " " + f);
+      apply(1, 1, "listing · “" + S.query + "” page 1", "search_id " + S.sid + " · parameters changed, new hash");
+    },
+    retype: function () {
+      var q = queries[S.qi++ % queries.length];
+      newQuery(q);
+      apply(1, 1, "listing · “" + q + "” page 1", "search_id " + S.sid + " · new keyword, new hash");
+    },
+    adback: function () {
+      apply(1, 0, "ad_page → back to “" + S.query + "” page " + S.page, "search_id " + S.sid + " · re-render, same pair");
+    },
+    view: function () {
+      apply(1, 0, "listing · “" + S.query + "” page " + S.page + " (view toggled)", "search_id " + S.sid + " · same pair, re-render");
+    },
+    saved: function () {
+      var q = "saved: " + queries[S.qi++ % queries.length];
+      newQuery(q);
+      apply(1, 1, "listing · “" + q + "” page 1", "search_id " + S.sid + " · first run of this hash in the session");
+    },
+    seller: function () {
+      var sid = hash("seller-" + S.n);
+      apply(1, 0, "listing · seller's other ads", "search_id " + sid + " · no keyword, no category → fails the qualifier");
+    },
+    repeat: function () {
+      S.page = 1;
+      apply(1, 0, "listing · “" + S.query + "” page 1 (again)", "search_id " + S.sid + " · same hash, same session");
+    },
+    tomorrow: function () {
+      S.session++; S.page = 1;
+      apply(1, 1, "listing · “" + S.query + "” page 1", "search_id " + S.sid + " · same hash, new session → new pair");
+    }
+  };
+
+  document.querySelectorAll(".sim button.act").forEach(function (b) {
+    b.addEventListener("click", function () { acts[b.getAttribute("data-act")](); });
+  });
+  el("reset").addEventListener("click", reset);
+  el("resetCounts").addEventListener("click", function () { clearCounts("Counts reset — run a query."); render(); });
+
+  reset();
+  acts.query(); acts.scroll(); acts.scroll(); acts.filter();
+})();
+</script>
+{% endblock %}

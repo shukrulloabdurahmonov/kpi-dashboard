@@ -48,13 +48,14 @@ SEARCH_TABS = [
     ("search_ctr", "/search/ctr", "CTR & success"),
     ("search_keywords", "/search/keywords", "Keywords"),
     ("search_methodology", "/search/methodology", "Methodology"),
+    ("search_simulator", "/search/simulator", "What is a search?"),
     ("search_deepdive", "/search/deepdive", "Source deep dive"),
     ("search_definitions", "/search/definitions", "Definitions"),
 ]
 
 # tabs with hand-written routes, skipped by the render_tab registration loop
 HAND_ROUTED = {"dictionary", "player", "search_methodology", "search_deepdive",
-               "search_definitions"}
+               "search_definitions", "search_simulator"}
 
 JIRA_REQUEST_URL = (
     "https://tteam.atlassian.net/jira/software/projects/AN/list"
@@ -1874,6 +1875,17 @@ def create_app():
             active="search_methodology", built_at=built, age_hours=age_h,
             freshness=level, dash_title=SEARCH_DASH_TITLE, extracted=extracted,
             trino_sqls=trino_sqls, hydra_sqls=hydra_sqls,
+        )
+
+    @app.route("/search/simulator")
+    def search_simulator():
+        # interactive page: OLX's page-view search count vs the (session, search_id)
+        # alternative, for the Search team to pick the unit behind Total searches
+        built, age_h, level = data.freshness() if data.available() else (None, None, "missing")
+        return render_template(
+            "search_simulator.html", tabs=SEARCH_TABS, active="search_simulator",
+            built_at=built, age_hours=age_h, freshness=level,
+            dash_title=SEARCH_DASH_TITLE,
         )
 
     def render_tab(tab_id):
