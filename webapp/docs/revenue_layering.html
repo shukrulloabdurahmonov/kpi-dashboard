@@ -1,0 +1,1068 @@
+<title>UZ Revenue Layering</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+
+<style>
+  :root {
+    --ground:#FBFBFC; --surface:#F1F3F6; --sunken:#E7EAEF; --ink:#101418;
+    --muted:#5A6472; --rule:#DCE0E7;
+    --accent:#0E6E6B; --accent-w:#DCEDEB; --accent-s:#0E6E6B;
+    --warn:#8A5309; --warn-w:#F6EBDA;
+    --f-display:"Bricolage Grotesque","Helvetica Neue",Arial,sans-serif;
+    --f-body:"Source Serif 4",Georgia,"Times New Roman",serif;
+    --f-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#0E1116; --surface:#171B22; --sunken:#1E232B; --ink:#E7EAEF;
+      --muted:#97A1B0; --rule:#272D37;
+      --accent:#58C8BF; --accent-w:#13332F; --accent-s:#58C8BF;
+      --warn:#D9A441; --warn-w:#2E2513;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#0E1116; --surface:#171B22; --sunken:#1E232B; --ink:#E7EAEF;
+    --muted:#97A1B0; --rule:#272D37;
+    --accent:#58C8BF; --accent-w:#13332F; --accent-s:#58C8BF;
+    --warn:#D9A441; --warn-w:#2E2513;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--ground); color: var(--ink);
+    font-family: var(--f-body); font-size: 17px; line-height: 1.62;
+    margin: 0; padding-inline: 20px; padding-block: 0 72px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  .col { max-width: 660px; }
+
+  header.mast { padding-block: 56px 26px; border-bottom: 2px solid var(--ink); margin-bottom: 40px; }
+  .eyebrow { font-family: var(--f-mono); font-size: 11.5px; font-weight: 600;
+    letter-spacing: .13em; text-transform: uppercase; color: var(--accent); margin: 0 0 18px; }
+  h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(30px,6vw,46px);
+    line-height: 1.06; letter-spacing: -.022em; margin: 0 0 16px; text-wrap: balance; }
+  .standfirst { font-size: 19px; line-height: 1.55; color: var(--muted); margin: 0; max-width: 64ch; }
+
+  section { margin-bottom: 52px; }
+  h2 { font-family: var(--f-display); font-weight: 700; font-size: 25px; line-height: 1.2;
+    letter-spacing: -.015em; margin: 0 0 6px; text-wrap: balance; }
+  h2 + .dek { color: var(--muted); font-size: 16px; margin: 0 0 22px; max-width: 62ch; }
+  h3 { font-family: var(--f-display); font-weight: 700; font-size: 16.5px; margin: 26px 0 7px; }
+  p { margin: 0 0 15px; max-width: 66ch; }
+  ul { margin: 0 0 15px; padding-left: 20px; max-width: 66ch; }
+  li { margin-bottom: 8px; }
+  strong { font-weight: 600; }
+  code { font-family: var(--f-mono); font-size: .85em; background: var(--surface);
+    border: 1px solid var(--rule); border-radius: 3px; padding: 1px 4px; word-break: break-word; }
+  a { color: var(--accent); text-underline-offset: 2px; }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* ---- diagram ---- */
+  .figscroll { overflow-x: auto; }
+  figure { margin: 0; }
+  figure svg { display: block; width: 100%; min-width: 940px; max-width: 100%; height: auto; }
+  figcaption { color: var(--muted); font-size: 14px; margin-top: 12px; max-width: 74ch; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 0 0 18px; padding: 0; list-style: none; }
+  .legend li { display: flex; align-items: center; gap: 8px; margin: 0;
+    font-family: var(--f-mono); font-size: 11.5px; color: var(--muted); }
+  .swatch { width: 22px; height: 12px; border: 1.5px solid var(--ink); background: var(--surface); flex: none; }
+  .swatch.new { border-style: dashed; border-color: var(--accent); background: var(--accent-w); }
+  .swatch.seed { border-style: dashed; border-color: var(--accent); background: var(--accent-w); border-radius: 7px; }
+  .swatch.dead { border-color: var(--warn); background: var(--warn-w); }
+
+  .node { cursor: pointer; }
+  .node .hit { fill: transparent; }
+  .node:hover .box { stroke-width: 2.2; }
+  .node:focus-visible { outline: none; }
+  .node:focus-visible .box { stroke-width: 2.6; }
+  .node[aria-pressed="true"] .box { stroke-width: 3; }
+  .node[aria-pressed="true"] .sel { opacity: 1; }
+  .sel { opacity: 0; }
+
+  .hint { font-family: var(--f-mono); font-size: 12px; color: var(--accent);
+    margin: 0 0 14px; display: flex; align-items: center; gap: 8px; }
+  .hint::before { content: "▸"; }
+
+  /* ---- detail panel ---- */
+  .panel { border: 1px solid var(--rule); border-top: 3px solid var(--accent);
+    background: var(--surface); margin-top: 28px; }
+  .panel-head { padding: 16px 20px 14px; border-bottom: 1px solid var(--rule);
+    display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: baseline; }
+  .panel-head h3 { font-family: var(--f-mono); font-size: 16px; font-weight: 600;
+    margin: 0; letter-spacing: -.01em; }
+  .panel-path { font-family: var(--f-mono); font-size: 11.5px; color: var(--muted);
+    width: 100%; margin: 0; word-break: break-all; }
+  .panel-note { padding: 14px 20px 0; margin: 0; font-size: 15.5px; color: var(--muted); max-width: 72ch; }
+  .panel-sql { overflow-x: auto; padding: 14px 20px 20px; }
+  .panel-sql pre { font-family: var(--f-mono); font-size: 12.5px; line-height: 1.6;
+    margin: 0; white-space: pre; color: var(--ink); }
+
+  .btn {
+    margin-left: auto; font-family: var(--f-mono); font-size: 11.5px; font-weight: 600;
+    letter-spacing: .04em; color: var(--accent); background: var(--ground);
+    border: 1px solid var(--accent); border-radius: 3px; padding: 5px 11px; cursor: pointer;
+    white-space: nowrap; line-height: 1.2;
+  }
+  .btn:hover { background: var(--accent-w); }
+  .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .btn[aria-pressed="true"] { background: var(--accent-w); }
+
+  .pill { font-family: var(--f-mono); font-size: 10.5px; font-weight: 600; letter-spacing: .06em;
+    text-transform: uppercase; padding: 2px 7px; border: 1px solid currentColor; white-space: nowrap; }
+  .pill.has { color: var(--muted); }
+  .pill.new { color: var(--accent); }
+  .pill.dead { color: var(--warn); }
+
+  .callout { background: var(--warn-w); border: 1px solid var(--rule); border-left: 3px solid var(--warn);
+    padding: 19px 22px 5px; margin: 0 0 22px; }
+  .callout .tag { font-family: var(--f-mono); font-size: 10.5px; font-weight: 600; letter-spacing: .11em;
+    text-transform: uppercase; color: var(--warn); display: block; margin-bottom: 9px; }
+
+  footer { border-top: 1px solid var(--rule); padding-top: 22px; color: var(--muted); font-size: 14px; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .box, .sel { transition: stroke-width .12s ease, opacity .12s ease; }
+  }
+  @media (max-width: 560px) {
+    body { font-size: 16px; }
+    header.mast { padding-block: 40px 20px; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="mast">
+    <p class="eyebrow">dbt · olam · iceberg</p>
+    <h1>Bronze to gold, for UZ revenue</h1>
+    <p class="standfirst">
+      What already exists in <code>dbt/olam</code>, and what a revenue mart would add on top of it.
+      Select any model in the diagram to read the SQL that builds it from the layer below.
+    </p>
+  </header>
+
+  <section>
+    <h2>The wiring</h2>
+    <p class="dek">Solid boxes exist today. Dashed boxes are the proposal.</p>
+
+    <ul class="legend">
+      <li><span class="swatch"></span> exists in dbt/olam</li>
+      <li><span class="swatch new"></span> proposed model (SQL)</li>
+      <li><span class="swatch seed"></span> proposed seed (CSV, hand-maintained)</li>
+      <li><span class="swatch dead"></span> not on the revenue path</li>
+    </ul>
+
+    <p class="hint">Click a box — or tab to it and press Enter — to see its SQL below.</p>
+
+    <figure>
+      <div class="figscroll">
+        <svg viewBox="0 0 1180 665" role="group" id="diagram"
+             aria-label="Data flow from five bronze Iceberg tables through staging models and two seeds into the gold fact fct_olxuz_payments, which feeds the revenue_total metric.">
+          <defs>
+            <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+            </marker>
+            <marker id="arA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0E6E6B"/>
+            </marker>
+          </defs>
+
+          <g font-family="'JetBrains Mono', monospace" fill="currentColor">
+
+            <!-- column headers -->
+            <g font-size="11" font-weight="600" letter-spacing="1.6" opacity=".62">
+              <text x="15"  y="34">BRONZE</text>
+              <text x="330" y="34">SILVER</text>
+              <text x="700" y="34">GOLD · MART</text>
+              <text x="975" y="34">GOLD · METRIC</text>
+            </g>
+            <line x1="15" y1="52" x2="1165" y2="52" stroke="currentColor" stroke-opacity=".22"/>
+
+            <!-- ======== edges: bronze -> silver ======== -->
+            <g stroke="currentColor" stroke-opacity=".5" fill="none" marker-end="url(#ar)">
+              <line x1="240" y1="123" x2="326" y2="123"/>
+              <line x1="240" y1="203" x2="326" y2="203"/>
+              <line x1="240" y1="283" x2="326" y2="283"/>
+              <line x1="240" y1="363" x2="326" y2="363"/>
+              <line x1="240" y1="443" x2="326" y2="443"/>
+            </g>
+            <g font-size="9.5" text-anchor="middle" opacity=".7">
+              <text x="283" y="116">flatten tree</text>
+              <text x="283" y="196">pass through</text>
+              <text x="283" y="276">dedup dumps</text>
+              <text x="283" y="356">current state</text>
+              <text x="283" y="436">keep as log</text>
+            </g>
+
+            <!-- ======== edges: into dim_categories and down ======== -->
+            <line x1="560" y1="123" x2="696" y2="123" stroke="currentColor" stroke-opacity=".5"
+                  fill="none" marker-end="url(#ar)"/>
+            <path d="M 810 151 V 276" stroke="currentColor" stroke-opacity=".5" fill="none" marker-end="url(#ar)"/>
+            <text x="820" y="200" font-size="9.5" opacity=".7">category_l1_id,</text>
+            <text x="820" y="213" font-size="9.5" opacity=".7">category_l2_id</text>
+
+            <!-- ======== edges: converging into the fact ======== -->
+            <g stroke="#0E6E6B" stroke-opacity=".85" fill="none" marker-end="url(#arA)">
+              <path d="M 560 203 H 600 V 300 H 696"/>
+              <path d="M 560 283 H 585 V 322 H 696"/>
+              <path d="M 560 363 H 570 V 345 H 696"/>
+              <path d="M 560 523 H 630 V 390 H 696"/>
+              <path d="M 560 593 H 615 V 368 H 696"/>
+            </g>
+            <g font-size="9.5" fill="#0E6E6B" opacity=".95">
+              <text x="606" y="295">price · id_ad</text>
+              <text x="591" y="317">product_type</text>
+              <text x="576" y="340">category_id</text>
+              <text x="566" y="518">finance map</text>
+              <text x="566" y="588">vat by date</text>
+            </g>
+
+            <!-- ======== edge: fact -> metric ======== -->
+            <path d="M 920 345 H 971" stroke="currentColor" stroke-opacity=".5" fill="none" marker-end="url(#ar)"/>
+            <text x="945" y="338" font-size="9.5" text-anchor="middle" opacity=".7">sum</text>
+
+            <!-- ======== NODES ======== -->
+            <!-- bronze -->
+            <g class="node" data-key="b_categories" role="button" tabindex="0" aria-pressed="false" aria-label="bronze olxuz_categories">
+              <rect class="sel" x="11" y="91" width="233" height="64" fill="none" stroke="#0E6E6B" stroke-width="1"/>
+              <rect class="box" x="15" y="95" width="225" height="56" fill="var(--ground)" stroke="currentColor" stroke-opacity=".55"/>
+              <text x="27" y="117" font-size="11.5">categories</text>
+              <text x="27" y="135" font-size="10" opacity=".6">snapshot · 861 rows</text>
+              <rect class="hit" x="15" y="95" width="225" height="56"/>
+            </g>
+            <g class="node" data-key="b_payments" role="button" tabindex="0" aria-pressed="false" aria-label="bronze olxuz_paidads_user_payments">
+              <rect class="sel" x="11" y="171" width="233" height="64" fill="none" stroke="#0E6E6B" stroke-width="1"/>
+              <rect class="box" x="15" y="175" width="225" height="56" fill="var(--ground)" stroke="currentColor" stroke-opacity=".55"/>
+              <text x="27" y="197" font-size="11.5">paidads_user_payments</text>
+              <text x="27" y="215" font-size="10" opacity=".6">snapshot · 1 row per id</text>
+              <rect class="hit" x="15" y="175" width="225" height="56"/>
+            </g>
+            <g class="node" data-key="b_indexes" role="button" tabindex="0" aria-pressed="false" aria-label="bronze olxuz_paidads_indexes">
+              <rect class="sel" x="11" y="251" width="233" height="64" fill="none" stroke="#0E6E6B" stroke-width="1"/>
+              <rect class="box" x="15" y="255" width="225" height="56" fill="var(--ground)" stroke="currentColor" stroke-opacity=".55"/>
+              <text x="27" y="277" font-size="11.5">paidads_indexes</text>
+              <text x="27" y="295" font-size="10" opacity=".6">catalog · 2 dumps</text>
+              <rect class="hit" x="15" y="255" width="225" height="56"/>
+            </g>
+            <g class="node" data-key="b_adslog" role="button" tabindex="0" aria-pressed="false" aria-label="bronze olxuz_ads_log">
+              <rect class="sel" x="11" y="331" width="233" height="64" fill="none" stroke="#0E6E6B" stroke-width="1"/>
+              <rect class="box" x="15" y="335" width="225" height="56" fill="var(--ground)" stroke="currentColor" stroke-opacity=".55"/>
+              <text x="27" y="357" font-size="11.5">ads_log</text>
+              <text x="27" y="375" font-size="10" opacity=".6">CDC append-only</text>
+              <rect class="hit" x="15" y="335" width="225" height="56"/>
+            </g>
+            <g class="node" data-key="b_paymentslog" role="button" tabindex="0" aria-pressed="false" aria-label="bronze olxuz_paidads_user_payments_log">
+              <rect class="sel" x="11" y="411" width="233" height="64" fill="none" stroke="#0E6E6B" stroke-width="1"/>
+              <rect class="box" x="15" y="415" width="225" height="56" fill="var(--ground)" stroke="currentColor" stroke-opacity=".55"/>
+              <text x="27" y="437" font-size="11.5">paidads_user_payments_log</text>
+              <text x="27" y="455" font-size="10" opacity=".6">CDC append-only</text>
+              <rect class="hit" x="15" y="415" width="225" height="56"/>
+            </g>
+
+            <!-- silver -->
+            <g class="node" data-key="s_categories" role="button" tabindex="0" aria-pressed="false" aria-label="silver stg_olxuz_categories">
+              <rect class="sel" x="326" y="91" width="238" height="64" fill="none" stroke="#0E6E6B" stroke-width="1"/>
+              <rect class="box" x="330" y="95" width="230" height="56" fill="var(--ground)" stroke="currentColor" stroke-opacity=".55"/>
+              <text x="342" y="117" font-size="11.5">stg_olxuz_categories</text>
+              <text x="342" y="135" font-size="10" opacity=".6">parent 0 → null</text>
+              <rect class="hit" x="330" y="95" width="230" height="56"/>
+            </g>
+            <g class="node" data-key="s_paycur" role="button" tabindex="0" aria-pressed="false" aria-label="silver stg_olxuz_payments_current, proposed">
+              <rect class="sel" x="326" y="171" width="238" height="64" fill="none" stroke="#0E6E6B" stroke-width="1"/>
+              <rect class="box" x="330" y="175" width="230" height="56" fill="var(--accent-w)" stroke="#0E6E6B" stroke-dasharray="5 3"/>
+              <text x="342" y="197" font-size="11.5" fill="#0E6E6B">stg_olxuz_payments_current</text>
+              <text x="342" y="215" font-size="10" fill="#0E6E6B" opacity=".8">sign flip · drop top-ups</text>
+              <rect class="hit" x="330" y="175" width="230" height="56"/>
+            </g>
+            <g class="node" data-key="s_indexes" role="button" tabindex="0" aria-pressed="false" aria-label="silver stg_olxuz_paidads_indexes, proposed">
+              <rect class="sel" x="326" y="251" width="238" height="64" fill="none" stroke="#0E6E6B" stroke-width="1"/>
+              <rect class="box" x="330" y="255" width="230" height="56" fill="var(--accent-w)" stroke="#0E6E6B" stroke-dasharray="5 3"/>
+              <text x="342" y="277" font-size="11.5" fill="#0E6E6B">stg_olxuz_paidads_indexes</text>
+              <text x="342" y="295" font-size="10" fill="#0E6E6B" opacity=".8">id → product_type</text>
+              <rect class="hit" x="330" y="255" width="230" height="56"/>
+            </g>
+            <g class="node" data-key="s_ads" role="button" tabindex="0" aria-pressed="false" aria-label="silver stg_olxuz_ads">
+              <rect class="sel" x="326" y="331" width="238" height="64" fill="none" stroke="#0E6E6B" stroke-width="1"/>
+              <rect class="box" x="330" y="335" width="230" height="56" fill="var(--ground)" stroke="currentColor" stroke-opacity=".55"/>
+              <text x="342" y="357" font-size="11.5">stg_olxuz_ads</text>
+              <text x="342" y="375" font-size="10" opacity=".6">current state · category_id</text>
+              <rect class="hit" x="330" y="335" width="230" height="56"/>
+            </g>
+            <g class="node" data-key="s_paylog" role="button" tabindex="0" aria-pressed="false" aria-label="silver stg_olxuz_payments, not on the revenue path">
+              <rect class="sel" x="326" y="411" width="238" height="64" fill="none" stroke="#8A5309" stroke-width="1"/>
+              <rect class="box" x="330" y="415" width="230" height="56" fill="var(--warn-w)" stroke="#8A5309" stroke-opacity=".85"/>
+              <text x="342" y="437" font-size="11.5" fill="#8A5309">stg_olxuz_payments</text>
+              <text x="342" y="455" font-size="10" fill="#8A5309" opacity=".85">log-shaped · QC + history</text>
+              <rect class="hit" x="330" y="415" width="230" height="56"/>
+            </g>
+
+            <!-- seeds -->
+            <g class="node" data-key="seed_fin" role="button" tabindex="0" aria-pressed="false" aria-label="seed_map_finance_categories, proposed">
+              <rect class="sel" x="326" y="491" width="238" height="64" rx="12" fill="none" stroke="#0E6E6B" stroke-width="1"/>
+              <rect class="box" x="330" y="495" width="230" height="56" rx="10" fill="var(--accent-w)" stroke="#0E6E6B" stroke-dasharray="5 3"/>
+              <text x="342" y="517" font-size="11.5" fill="#0E6E6B">seed_map_finance_categories</text>
+              <text x="342" y="535" font-size="10" fill="#0E6E6B" opacity=".8">142 (L1, L2) pairs</text>
+              <text x="548" y="535" font-size="9" font-weight="600" letter-spacing=".8"
+                    text-anchor="end" fill="#0E6E6B" opacity=".95">SEED · CSV</text>
+              <rect class="hit" x="330" y="495" width="230" height="56"/>
+            </g>
+            <g class="node" data-key="seed_vat" role="button" tabindex="0" aria-pressed="false" aria-label="seed_vat_rates, proposed">
+              <rect class="sel" x="326" y="561" width="238" height="64" rx="12" fill="none" stroke="#0E6E6B" stroke-width="1"/>
+              <rect class="box" x="330" y="565" width="230" height="56" rx="10" fill="var(--accent-w)" stroke="#0E6E6B" stroke-dasharray="5 3"/>
+              <text x="342" y="587" font-size="11.5" fill="#0E6E6B">seed_vat_rates</text>
+              <text x="342" y="605" font-size="10" fill="#0E6E6B" opacity=".8">0 / 20 / 15 / 12%</text>
+              <text x="548" y="605" font-size="9" font-weight="600" letter-spacing=".8"
+                    text-anchor="end" fill="#0E6E6B" opacity=".95">SEED · CSV</text>
+              <rect class="hit" x="330" y="565" width="230" height="56"/>
+            </g>
+
+            <!-- gold -->
+            <g class="node" data-key="g_dimcat" role="button" tabindex="0" aria-pressed="false" aria-label="gold dim_categories">
+              <rect class="sel" x="696" y="91" width="228" height="64" fill="none" stroke="#0E6E6B" stroke-width="1"/>
+              <rect class="box" x="700" y="95" width="220" height="56" fill="var(--ground)" stroke="currentColor" stroke-opacity=".55"/>
+              <text x="712" y="117" font-size="11.5">dim_categories</text>
+              <text x="712" y="135" font-size="10" opacity=".6">recursive L1 / L2 walk</text>
+              <rect class="hit" x="700" y="95" width="220" height="56"/>
+            </g>
+            <g class="node" data-key="g_fct" role="button" tabindex="0" aria-pressed="false" aria-label="gold fct_olxuz_payments, proposed">
+              <rect class="sel" x="696" y="276" width="228" height="138" fill="none" stroke="#0E6E6B" stroke-width="1"/>
+              <rect class="box" x="700" y="280" width="220" height="130" fill="var(--accent-w)" stroke="#0E6E6B" stroke-dasharray="5 3" stroke-width="1.5"/>
+              <text x="712" y="308" font-size="12.5" font-weight="600" fill="#0E6E6B">fct_olxuz_payments</text>
+              <text x="712" y="332" font-size="10" fill="#0E6E6B" opacity=".85">grain: one payment</text>
+              <text x="712" y="350" font-size="10" fill="#0E6E6B" opacity=".85">revenue_stream · VAS / NNL</text>
+              <text x="712" y="368" font-size="10" fill="#0E6E6B" opacity=".85">finance_category_1 / _2</text>
+              <text x="712" y="386" font-size="10" fill="#0E6E6B" opacity=".85">net + gross UZS</text>
+              <rect class="hit" x="700" y="280" width="220" height="130"/>
+            </g>
+            <g class="node" data-key="m_revenue" role="button" tabindex="0" aria-pressed="false" aria-label="gold metric revenue_total">
+              <rect class="sel" x="971" y="313" width="198" height="64" fill="none" stroke="#0E6E6B" stroke-width="1"/>
+              <rect class="box" x="975" y="317" width="190" height="56" fill="var(--ground)" stroke="currentColor" stroke-opacity=".55"/>
+              <text x="987" y="339" font-size="11.5">revenue_total</text>
+              <text x="987" y="357" font-size="10" opacity=".6">stub → production</text>
+              <rect class="hit" x="975" y="317" width="190" height="56"/>
+            </g>
+
+          </g>
+        </svg>
+      </div>
+      <figcaption>
+        Bronze names are shown without their <code>olxuz_</code> prefix. Everything converges on one fact at
+        payment grain; the two seeds enter alongside the staging models because they carry rules no OLX UZ
+        table knows — the eu_bi finance category map and the dated VAT schedule.
+      </figcaption>
+    </figure>
+
+    <div class="panel" id="panel">
+      <div class="panel-head">
+        <h3 id="p-name">fct_olxuz_payments</h3>
+        <span class="pill new" id="p-status">new</span>
+        <button type="button" class="btn" id="p-toggle" aria-pressed="false"
+                aria-controls="p-sql">Show full SQL</button>
+        <p class="panel-path" id="p-path">models/gold/olxuz/fct_olxuz_payments.sql</p>
+      </div>
+      <p class="panel-note" id="p-note"></p>
+      <div class="panel-sql"><pre id="p-sql"></pre></div>
+    </div>
+  </section>
+
+  <section class="col">
+    <h2>What each layer is allowed to do</h2>
+    <p class="dek">The split is not cosmetic — it is what keeps the fact re-runnable.</p>
+
+    <h3>Bronze — nothing</h3>
+    <p>
+      Already registered in <code>models/bronze/olxuz_source.yml</code>. Both
+      <code>olxuz_paidads_user_payments</code> and <code>olxuz_paidads_indexes</code> are listed today, just
+      undocumented — so this work adds descriptions, not sources.
+    </p>
+
+    <h3>Silver — shape, never meaning</h3>
+    <p>
+      Dedup, last-write-wins, casts, timezone. The sign flip on <code>price</code> and dropping top-up rows
+      belong here because they correct the source's shape, not because they decide anything. No category
+      logic, no VAT, no revenue buckets.
+    </p>
+
+    <h3>Gold — the business rules, once</h3>
+    <p>
+      <code>fct_olxuz_payments</code> is where <code>product_type</code> becomes
+      <code>revenue_stream</code>, the finance category resolves, and net comes off gross. One row per
+      payment, so a distinct count of paying listers stays correct at any grain — the reason this is a fact
+      and not a daily aggregate.
+    </p>
+  </section>
+
+  <section class="col">
+    <h2>Three things to settle before building</h2>
+
+    <h3>The name collides with the ads convention</h3>
+    <p>
+      Ads use <code>stg_olxuz_ads_log</code> for the CDC log and <code>stg_olxuz_ads</code> for current
+      state. Payments took the unsuffixed name for the <em>log</em>, and <code>olxuz_source.yml</code>
+      states the contract outright: <em>"stg_olxuz_payments stays log-shaped."</em> So the current-state
+      model cannot claim the name it wants. <code>stg_olxuz_payments_current</code> is the least-bad
+      option; renaming the existing model is cleaner but breaks its readers.
+    </p>
+
+    <h3>The metric catalogue entry is wrong today</h3>
+    <p>
+      <code>_metrics.yml</code> declares <code>revenue_total</code> as <code>unit: "RUB"</code> with
+      <code>source_marts: ["gold.fct_orders (TBD)"]</code>. Both need correcting — and someone has to
+      decide whether the metric reports UZS or converts to USD, since eu_bi and FPA both report USD.
+    </p>
+
+    <h3>Category is only trustworthy for recent months</h3>
+    <div class="callout">
+      <span class="tag">Do not ship a category split yet</span>
+      <p>
+        Packet purchases carry no <code>id_ad</code> and cannot be attributed — 10.3% of August 2026
+        revenue, all of it NNL. A further 2.2% has a <code>category_id</code> missing from
+        <code>dim_categories</code>, because the bronze category ingest stops at id 2099.
+      </p>
+      <p>
+        Backwards it collapses: June 2021 lands <strong>86.5% unattributed</strong>, because
+        <code>stg_olxuz_ads</code> is current state and those ads are long deleted. Revenue <em>totals</em>
+        are right at any date. The split is not.
+      </p>
+    </div>
+    <p>
+      Which makes the build order: seeds first, so the finance map is reviewable on its own; then the two
+      staging models; then the fact with an explicit <code>unattributed</code> bucket rather than a silent
+      misallocation; then the metric.
+    </p>
+  </section>
+
+  <footer class="col">
+    <p>
+      SQL shown for existing models is the current source in <code>dbt/olam</code>, lightly trimmed.
+      SQL for proposed models is a starting point, validated against yamato <code>eu_bi.fact_payments</code>
+      for 2026-08 (+0.03%) and 2021-06 (−0.01%).
+    </p>
+  </footer>
+
+</div>
+
+<script type="application/json" id="model-full">
+{
+ "b_categories": {
+  "name": "bronze_olxuz.olxuz_categories",
+  "status": "exists",
+  "cls": "has",
+  "path": "models/bronze/olxuz_source.yml",
+  "note": "Documented source. One-shot overwrite snapshot of the category tree — not CDC.",
+  "full": "- name: olxuz_categories\n  description: >\n    Flattened OLX UZ category taxonomy (tree_revision 333). Grain:\n    category_id. L1 roots have parent = 0. Nested parameters, icon, and\n    children are out of bronze.\n\n# ---------------------------------------------------------------------\n# Caveat found 2026-09-15: this snapshot stops at category_id 2099\n# (861 rows, ingested 2026-09-08), while ads reference 54 newer ids in\n# the 2100-2150 range across 352,275 ads. That gap is why 2.2% of\n# 2026-08 revenue cannot be attributed to a finance category.\n# ---------------------------------------------------------------------"
+ },
+ "b_payments": {
+  "name": "bronze_olxuz.olxuz_paidads_user_payments",
+  "status": "exists",
+  "cls": "has",
+  "path": "models/bronze/olxuz_source.yml",
+  "note": "Registered but undocumented — a bare entry in the source list. This is the snapshot mirror: one row per payment id, no CDC duplicates. It reproduces eu_bi's 'atlas' source partition to +0.03%.",
+  "full": "- name: olxuz_paidads_tariff_tests\n- name: olxuz_paidads_tariff_tests_log\n- name: olxuz_paidads_user_payments   <-- bare entry: no description, no column contract\n- name: olxuz_payment_basket\n- name: olxuz_payment_basket_log\n\n# ---------------------------------------------------------------------\n# Grain: one row per id. Columns that matter downstream:\n#\n#   id         payment id            (= eu_bi.fact_payments.payment_nk)\n#   date       local timestamp, already Asia/Tashkent wall-clock\n#   id_user    paying user\n#   id_ad      ad the service was applied to; NULL for packet purchases\n#   id_index   product id -> paidads_indexes.id\n#   price      SIGNED and GROSS: negative = charge, positive = top-up\n#   name       product label as shown to the user\n#\n# Verified 2026-08 against yamato eu_bi.fact_payments:\n#   Trino 10,266.6 vs eu_bi 10,263.6 mln UZS net  (+0.03%)\n# ---------------------------------------------------------------------"
+ },
+ "b_indexes": {
+  "name": "bronze_olxuz.olxuz_paidads_indexes",
+  "status": "exists",
+  "cls": "has",
+  "path": "models/bronze/olxuz_source.yml",
+  "note": "Registered but undocumented. The product catalogue — 1,720 live rows across two full dumps (2025-12-30 and 2026-08-13), so it must be deduplicated by id.",
+  "full": "- name: olxuz_observed_new\n- name: olxuz_observed_new_log\n- name: olxuz_paidads_indexes   <-- bare entry: no description, no column contract\n- name: olxuz_paidads_indexes_log\n- name: olxuz_paidads_tariff\n\n# ---------------------------------------------------------------------\n# `type` is the same vocabulary as eu_bi.dim_products.product_type:\n#   nnl, paid_subscription, ad_homepage, topads, pushup, bundle,\n#   highlight, urgent, logo, topupaccount, removecredits\n#\n# KNOWN GAP: max(id) here is 3371, but payments reference NNL packet\n# ids in the 7xxxxx range (15,455 payments / 1,181 mln UZS in 2026-08).\n# Every one of them is product_type = 'nnl' in eu_bi.dim_products, so\n# stg_olxuz_paidads_indexes' consumers fall back to 'nnl' rather than\n# dropping the rows. Confirmed by a row-level join: product_type agreed\n# on 18,152 of 18,152 payments on 2026-08-15.\n# ---------------------------------------------------------------------"
+ },
+ "b_adslog": {
+  "name": "bronze_olxuz.olxuz_ads_log",
+  "status": "exists",
+  "cls": "has",
+  "path": "models/bronze/olxuz_source.yml",
+  "note": "Documented source with a full column contract. Lazarus TSA append-only CDC log — the partitioned one, not the unpartitioned mirror.",
+  "full": "- name: olxuz_ads_log\n  description: >\n    CDC append-only log of the OLX UZ ads table: one row per change with\n    every ad column repeated. Partitioned by day(_olam_source_ts), the\n    source file time from the S3 path / Lazarus {epoch_micros}. Loaded\n    every 15 minutes, in steady state 1-2 h after the source change.\n    WBR ads silver reads this log, not the ads mirror. Moderation\n    rejections live in rmoderation_reasons (PHP-serialized) and\n    rmoderation_removed_at.\n  loaded_at_field: _olam_ingested_at\n  columns:\n    - name: id\n      description: Ad identifier (primary key of the listing).\n    - name: user_id\n      description: Advertiser user identifier.\n    - name: category_id\n      description: Leaf category identifier.\n    - name: net_ad_counted\n      description: 1 when the ad is counted as published / net.\n    - name: city_id\n      description: City identifier.\n    - name: region_id\n      description: Region identifier.\n    - name: district_id\n      description: District identifier.\n    - name: title\n      description: Ad title.\n    - name: description\n      description: Ad description.\n    - name: params\n      description: varchar key<=>value blob (price, price[currency], attributes).\n    - name: private_business\n      description: private or business.\n    - name: valid_to\n      description: Ad expiry timestamp.\n    - name: created_at_first\n      description: First ad creation timestamp (listing birth, not first-net).\n    - name: created_at\n      description: Ad creation / last refresh timestamp (naive local).\n    - name: status\n      description: Ad status (active, outdated, moderated, …).\n    - name: operation_timestamp\n      description: >\n        When Lazarus received this CDC record (UTC). Event clock for\n        first-net and SCD, not created_at.\n    - name: operation_type\n      description: Lazarus operation (insert, update, delete, DUMP).\n    - name: _olam_idempotent_key\n      description: Dedup key for at-least-once append.\n    - name: _olam_event_ts\n      description: >\n        Platform event stamp. Incremental ads_log is not partitioned\n        on this column.\n    - name: _olam_source_ts\n      description: >\n        When the source object was available on S3 / Lazarus\n        {epoch_micros}. Bronze incremental ads_log partition\n        day(_olam_source_ts).\n    - name: _olam_ingested_at\n      description: When bronze-s3 wrote this row. Ads silver cursor is source_date, not this."
+ },
+ "b_paymentslog": {
+  "name": "bronze_olxuz.olxuz_paidads_user_payments_log",
+  "status": "exists",
+  "cls": "has",
+  "path": "models/bronze/olxuz_source.yml",
+  "note": "The CDC counterpart of the snapshot. Carries history back to 2015-09, which the snapshot does not — but DUMP and insert events overlap, so raw sums run about 1.8x high.",
+  "full": "- name: olxuz_paidads_user_payments_log\n  description: >\n    CDC append-only log of OLX UZ paidads_user_payments: one row per\n    Lazarus insert/update/delete/DUMP. Partitioned by\n    day(_olam_source_ts). WBR silver stg_olxuz_payments reads this log, not\n    the unpartitioned payments mirror. date is naive local (already\n    Tashkent wall-clock); do not AT TIME ZONE it.\n  loaded_at_field: _olam_ingested_at\n  columns:\n    - name: id\n      description: Payment line identifier (source PK).\n    - name: date\n      description: >\n        Transaction timestamp, naive local. Payment date is CAST(date AS\n        date) with no UTC conversion.\n    - name: id_ad\n      description: Listing the VAS was bought for. NULL on some packages.\n    - name: id_index\n      description: Paid feature / product index (joins dim_products_v1).\n    - name: id_transaction\n      description: Checkout / session id (transactions / ATV).\n    - name: id_user\n      description: Paying user (payers / ARPPU).\n    - name: price\n      description: Line amount (gross in v1).\n    - name: name\n      description: Paid-feature display name. Admin-return names are dropped in silver.\n    - name: operation_timestamp\n      description: When Lazarus received this CDC record (UTC). Gold 4.3 last-write-wins orders this first.\n    - name: operation_type\n      description: Lazarus operation (insert, update, delete, DUMP). Deletes stay in silver.\n    - name: _olam_idempotent_key\n      description: Dedup key for at-least-once append.\n    - name: _olam_event_ts\n      description: Platform event stamp. Not the incremental cursor.\n    - name: _olam_source_ts\n      description: >\n        When the source object was available on S3 / Lazarus\n        {epoch_micros}. Bronze and silver payments_log partition\n        day(_olam_source_ts).\n    - name: _olam_ingested_at\n      description: When bronze-s3 wrote this row. Lineage only; not the incremental cursor.\n\n# ---------------------------------------------------------------------\n# 2026-08 as ingested: 917,997 DUMP rows covering 592,655 distinct ids,\n# plus 435,173 insert rows and 17 updates. Summing price across all of\n# them double-counts. Deduplicate by id (latest operation_timestamp)\n# before any arithmetic, or use the snapshot table instead.\n# ---------------------------------------------------------------------"
+ },
+ "s_categories": {
+  "name": "stg_olxuz_categories",
+  "status": "exists",
+  "cls": "has",
+  "path": "models/silver/static/stg_olxuz_categories.sql",
+  "note": "QC-only staging. No L1 walk here — that belongs to dim_categories.",
+  "full": "{{\n    config(\n        tags=['once']\n    )\n}}\n\n-- QC-only staging of bronze.olxuz_categories. No L1 walk and no dim_* here.\n-- Bronze stores parent = 0 on L1 roots (column is non-nullable); silver maps\n-- that to NULL so parent is null iff level = 1.\n\nselect\n    category_id,\n    nullif(parent, 0) as parent,\n    level,\n    name,\n    code,\n    type,\n    path\nfrom {{ source('bronze_olxuz', 'olxuz_categories') }}\nwhere\n    category_id is not null\n    and level between 1 and 4\n    and name is not null\n    and (\n        (level = 1 and (parent is null or parent = 0))\n        or (level > 1 and parent is not null and parent <> 0)\n    )"
+ },
+ "s_ads": {
+  "name": "stg_olxuz_ads",
+  "status": "exists",
+  "cls": "has",
+  "path": "models/silver/olxuz/stg_olxuz_ads.sql",
+  "note": "Current-state ads, last-write-wins from the CDC log. This is the category source for the fact — use it, never bronze.olxuz_ads directly.",
+  "full": "-- Current-state ads: last-write-wins from stg_olxuz_ads_log. No delete rows.\n-- net_ad_counted = 1 is a gold filter, not applied here.\n-- Incremental: one source_date from stg_olxuz_ads_log. Process dates in order.\n-- Also carries AN-56 content columns (title, price, geo) from the winning log event.\n-- Trino partitioning is bucket(col, n); tickets write Iceberg/Spark bucket(n, col).\n\n{{ config(\n    materialized='incremental',\n    incremental_strategy='merge',\n    unique_key='id',\n    on_schema_change='sync_all_columns',\n    properties={\n        'partitioning': \"ARRAY['bucket(id, 16)']\"\n    },\n    pre_hook=\"{{ ads_delete_tombstones() }}\"\n) }}\n\nwith new_events as (\n    select log.*\n    from {{ ref('stg_olxuz_ads_log') }} as log\n    {% if is_incremental() %}\n        where cast(log._olam_source_ts as date) = date '{{ var(\"source_date\") }}'\n    {% endif %}\n),\n\nlatest as (\n    select\n        new_events.*,\n        row_number() over (\n            partition by new_events.id\n            order by\n                new_events.operation_timestamp desc,\n                new_events._olam_event_ts desc,\n                new_events._olam_ingested_at desc\n        ) as rn\n    from new_events\n)\n\nselect\n    latest.id,\n    latest.id as ad_id,\n    latest.user_id,\n    latest.category_id,\n    latest.city_id,\n    latest.region_id,\n    latest.district_id,\n    {{ clean_text('latest.title') }} as title,\n    {{ clean_text('latest.description') }} as description,\n    try_cast(regexp_extract(latest.params, 'price<=>([0-9]+)', 1) as bigint) as price_amount,\n    regexp_extract(latest.params, 'price\\[currency\\]<=>([A-Z]+)', 1) as price_currency_code,\n    latest.private_business as ad_type,\n    latest.net_ad_counted,\n    latest.created_at_first,\n    latest.created_at,\n    latest.valid_to,\n    latest.status,\n    latest.operation_timestamp,\n    latest._olam_ingested_at\nfrom latest\nwhere\n    latest.rn = 1\n    and lower(latest.operation_type) <> 'delete'"
+ },
+ "s_paylog": {
+  "name": "stg_olxuz_payments",
+  "status": "off path",
+  "cls": "dead",
+  "path": "models/silver/olxuz/stg_olxuz_payments.sql",
+  "note": "Exists today and stays as it is. Log-shaped by source contract — QC and pre-2026 history. It must NOT feed the fact: DUMP and insert rows overlap and inflate totals about 1.8x.",
+  "full": "-- QC-only CDC log of bronze.olxuz_paidads_user_payments_log. No dim_*.\n-- Incremental: one source_date = date(_olam_source_ts). No ingested_at watermark.\n-- payment_date is CAST(date AS date): date is already local. Do not AT TIME ZONE\n-- (that would shift 19:00–23:59 into the next day).\n-- COALESCE(name, '') so NULL names are kept (NOT IN is UNKNOWN for NULL).\n-- Keep delete events: gold 4.3 un-counts when the latest event per id is delete.\n-- Iceberg spec change: --full-refresh after deploy (and after bronze log re-init).\n\n{{ config(\n    materialized='incremental',\n    incremental_strategy='merge',\n    unique_key='_olam_idempotent_key',\n    on_schema_change='sync_all_columns',\n    properties={\n        'partitioning': \"ARRAY['day(_olam_source_ts)']\"\n    }\n) }}\n\nselect\n    cast(src.id as bigint) as id,\n    cast(src.date as date) as payment_date,\n    with_timezone(src.date, 'Asia/Tashkent') as payment_ts_local,\n    src.id_ad,\n    src.id_index,\n    src.id_transaction,\n    src.id_user,\n    src.price,\n    src.name,\n    src.operation_type,\n    src.operation_timestamp,\n    src._olam_idempotent_key,\n    src._olam_event_ts,\n    src._olam_source_ts,\n    src._olam_ingested_at\nfrom {{ source('bronze_olxuz', 'olxuz_paidads_user_payments_log') }} as src\nwhere\n    coalesce(src.name, '') not in (\n        'Возврат средств администратором',\n        'Маъмур томонидан маблағларнинг қайтарилиши'\n    )\n    and src._olam_idempotent_key is not null\n    {% if is_incremental() %}\n        and cast(src._olam_source_ts as date) = date '{{ var(\"source_date\") }}'\n    {% endif %}"
+ },
+ "g_dimcat": {
+  "name": "dim_categories",
+  "status": "exists",
+  "cls": "has",
+  "path": "models/gold/static/dim_categories.sql",
+  "note": "Recursive walk from every category up to its Russian L1 and L2. Current state, not SCD — the same semantics eu_bi has, since its category_sk is re-synced to the listing's current category every 20 minutes.",
+  "full": "{{\n    config(\n        tags=['once']\n    )\n}}\n\n-- Current-state category dimension (not SCD). Each category_id walks to its\n-- Russian L1 and L2. Reads silver stg_olxuz_categories, not bronze.\n-- AN-56: added category_l2_id / category_l2_ru (NULL on L1 roots).\n\nwith recursive tree (\n    category_id,\n    parent_id,\n    level,\n    name,\n    code,\n    type,\n    category_l1_id,\n    category_l1_ru,\n    category_l2_id,\n    category_l2_ru\n) as (\n    select\n        category_id,\n        parent as parent_id,\n        level,\n        name,\n        code,\n        type,\n        category_id as category_l1_id,\n        name as category_l1_ru,\n        cast(null as integer) as category_l2_id,\n        cast(null as varchar) as category_l2_ru\n    from {{ ref('stg_olxuz_categories') }}\n    where level = 1\n\n    union all\n\n    select\n        child.category_id,\n        child.parent as parent_id,\n        child.level,\n        child.name,\n        child.code,\n        child.type,\n        ancestor.category_l1_id,\n        ancestor.category_l1_ru,\n        case when child.level = 2 then child.category_id else ancestor.category_l2_id end as category_l2_id,\n        case when child.level = 2 then child.name else ancestor.category_l2_ru end as category_l2_ru\n    from {{ ref('stg_olxuz_categories') }} as child\n    inner join tree as ancestor\n        on child.parent = ancestor.category_id\n)\n\nselect\n    category_id,\n    parent_id,\n    level,\n    name,\n    code,\n    type,\n    category_l1_id,\n    category_l1_ru,\n    category_l2_id,\n    category_l2_ru\nfrom tree"
+ },
+ "m_revenue": {
+  "name": "revenue_total",
+  "status": "stub",
+  "cls": "has",
+  "path": "models/gold/metrics/finance/revenue_total.sql",
+  "note": "Today it is a stub returning no rows. Replacing it is the last step, not the first — and the catalogue entry in _metrics.yml needs fixing at the same time.",
+  "full": "-- ===================== TODAY, IN THE REPO =====================\n\n{{\n    config(\n        materialized='view',\n        tags=['metric', 'finance', 'stub'],\n        meta={\n            'todo': 'Заменить заглушку на реальный расчёт после готовности витрины gold.fct_orders'\n        }\n    )\n}}\n\n-- =========================================================================\n-- МЕТРИКА: revenue_total\n-- Метаданные метрики: models/gold/metrics/_metrics.yml\n--\n-- Задача analytics engineer:\n--   1. Создать витрину gold.fct_orders (или аналог).\n--   2. Заменить SELECT ниже на реальный расчёт, сохранив имена и типы колонок.\n--   3. Заменить тег 'stub' на 'production' в config().\n-- =========================================================================\n\nselect\n    cast(null as date) as metric_date,\n    cast(0 as decimal(18, 2)) as revenue_total\nwhere 1 = 0\n\n\n-- ===================== PROPOSED REPLACEMENT =====================\n-- Same column contract (metric_date, revenue_total), real numbers.\n\n{{\n    config(\n        materialized='view',\n        tags=['metric', 'finance', 'production'],\n        meta={'source_marts': ['gold.fct_olxuz_payments']}\n    )\n}}\n\nselect\n    payment_date                                as metric_date,\n    cast(sum(amount_net_uzs) as decimal(18, 2)) as revenue_total\nfrom {{ ref('fct_olxuz_payments') }}\nwhere revenue_stream <> 'Not Revenue'\ngroup by payment_date\n\n\n-- Also fix models/gold/metrics/_metrics.yml, which today declares:\n--   unit: \"RUB\"                              -> UZS (or convert to USD)\n--   source_marts: [\"gold.fct_orders (TBD)\"]  -> gold.fct_olxuz_payments\n--   config.contract.enforced: false          -> consider enabling"
+ },
+ "s_paycur": {
+  "name": "stg_olxuz_payments_current",
+  "status": "new",
+  "cls": "new",
+  "path": "models/silver/olxuz/stg_olxuz_payments_current.sql  (proposed)",
+  "note": "Shape only: flip the sign so revenue is positive, split top-ups out, keep gross. No VAT and no revenue buckets — those are gold's job.",
+  "full": "-- Current-state payments off the bronze SNAPSHOT (one row per id), not the\n-- CDC log. stg_olxuz_payments stays log-shaped by source contract, hence\n-- the _current suffix rather than taking the unsuffixed name the way\n-- stg_olxuz_ads does over stg_olxuz_ads_log.\n--\n-- Silver corrects SHAPE, not meaning:\n--   * price is signed in the source (negative = charge, positive = wallet\n--     top-up). Flipped here so downstream sums are positive.\n--   * price is GROSS. It stays gross -- VAT is a business rule and belongs\n--     in gold, where the dated rate seed is joined.\n--   * id_ad = 0 means \"no ad\" (packet purchase); normalised to NULL.\n--\n-- Incremental window is 2 days because the source can restate a row after\n-- the fact; merge on payment_id makes the reprocess idempotent.\n\n{{ config(\n    materialized='incremental',\n    incremental_strategy='merge',\n    unique_key='payment_id',\n    on_schema_change='sync_all_columns',\n    properties={\n        'partitioning': \"ARRAY['month(payment_date)']\"\n    }\n) }}\n\nselect\n    cast(src.id as bigint)                      as payment_id,\n    cast(src.date as date)                      as payment_date,\n    with_timezone(src.date, 'Asia/Tashkent')    as payment_ts_local,\n    src.id_user                                 as user_id,\n    nullif(src.id_ad, 0)                        as ad_id,\n    src.id_index                                as product_id,\n    src.name                                    as product_name_local,\n    -src.price                                  as amount_gross_uzs,\n    src.price > 0                               as is_topup\nfrom {{ source('bronze_olxuz', 'olxuz_paidads_user_payments') }} as src\nwhere\n    src.price <> 0\n    {% if is_incremental() %}\n        and cast(src.date as date)\n            >= date '{{ var(\"source_date\") }}' - interval '2' day\n    {% endif %}"
+ },
+ "s_indexes": {
+  "name": "stg_olxuz_paidads_indexes",
+  "status": "new",
+  "cls": "new",
+  "path": "models/silver/olxuz/stg_olxuz_paidads_indexes.sql  (proposed)",
+  "note": "Deduplicate the two catalogue dumps to one row per product id. Currently done inline as a subquery in every ad hoc query — which is exactly why it should be a model.",
+  "full": "-- Product catalogue, one row per product id.\n--\n-- Bronze holds two full dumps (2025-12-30 and 2026-08-13): 3,440 rows for\n-- 1,720 live products. Every consumer that has needed this so far has\n-- written `select distinct id, type from ...` inline; this makes it a\n-- model so the dedup rule lives in one place.\n--\n-- Small and fully rebuilt -- materialized as a table, not incremental.\n\n{{ config(materialized='table') }}\n\nwith ranked as (\n    select\n        src.*,\n        row_number() over (\n            partition by src.id\n            order by src._olam_event_ts desc\n        ) as rn\n    from {{ source('bronze_olxuz', 'olxuz_paidads_indexes') }} as src\n)\n\nselect\n    ranked.id       as product_id,\n    ranked.code     as product_code,\n    ranked.type     as product_type,\n    ranked.duration as duration_days\nfrom ranked\nwhere ranked.rn = 1\n\n-- NOTE for consumers: this table stops at product_id 3371. Payments\n-- reference NNL packet ids in the 7xxxxx range that the source snapshot\n-- never carried. Join LEFT and coalesce the missing type to 'nnl' --\n-- verified correct against eu_bi.dim_products, where every such id is\n-- product_type = 'nnl'."
+ },
+ "seed_fin": {
+  "name": "seed_map_finance_categories",
+  "status": "new",
+  "cls": "new",
+  "path": "seeds/seed_map_finance_categories.csv  (proposed)",
+  "note": "Lifted from eu_bi.map_categories_finance and verified: the finance category is fully determined by (L1, L2) across all 717 UZ leaves — with exactly one exception, daily rent, handled as an override in the fact.",
+  "full": "# seeds/seed_map_finance_categories.csv\n#\n# Source: eu_bi.map_categories_finance on yamato Redshift (site_sk =\n# 'olx|eu|uz'), which tteam Trino cannot reach -- hence a seed, not a model.\n#\n# Verified 2026-09-15: across all 717 UZ leaf categories the finance\n# category is a function of (L1, L2) alone. Exactly TWO (L1, L2) pairs are\n# ambiguous -- Квартиры (1511) and Дома (1515) under Недвижимость -- because\n# they split at L3 on 'Аренда посуточно'. That is handled as an override\n# in fct_olxuz_payments rather than by exploding this seed to L3.\n\nl1_id,l2_id,finance_category_1,finance_category_2\n1,,Real estate,Real estate\n1,1511,Real estate,Real estate\n1,1515,Real estate,Real estate\n1,1519,Real estate,Real estate\n1,1521,Real estate,Real estate\n1,1523,Real estate,Real estate\n1,1563,Services,Services\n1,1763,Real estate,Real estate\n4,,Motors,Cars&Bikes\n4,1101,Motors,Heavy Machinery\n4,1201,For sale,Parts\n...\n36,,For sale,For sale\n2150,,Services,Services\n-1,,Unknown,Unknown\n\n# 142 rows total. Distribution of the 717 underlying leaves:\n#   For sale / For sale            352\n#   Services / Services            122\n#   Jobs / Jobs                    100\n#   Motors / Cars&Bikes             91\n#   For sale / Parts                19\n#   Real estate / Real estate       19\n#   Motors / Heavy Machinery        13\n#   Unknown / Unknown                1"
+ },
+ "seed_vat": {
+  "name": "seed_vat_rates",
+  "status": "new",
+  "cls": "new",
+  "path": "seeds/seed_vat_rates.csv  (proposed)",
+  "note": "The UZ VAT rate is not constant. Taken from eu_bi.cnfg_tax_rates and confirmed month by month against fact_payments at every boundary — gross = net + tax holds on every row, all years.",
+  "full": "# seeds/seed_vat_rates.csv\n#\n# Source: eu_bi.cnfg_tax_rates (country_nk = 'UZ') on yamato Redshift.\n# valid_to is EXCLUSIVE.\n\nvalid_from,valid_to,vat_rate\n1900-01-01,2019-01-01,0.00\n2019-01-01,2019-10-01,0.20\n2019-10-01,2023-01-01,0.15\n2023-01-01,9999-12-31,0.12\n\n# Confirmed empirically against eu_bi.fact_payments, not just trusted from\n# the config table. gross = net + tax holds on EVERY row in every year\n# (~50M rows checked, zero exceptions), and the monthly ratio steps exactly\n# at each boundary:\n#\n#     2018-11  1.0000      2018-12  1.0000\n#     2019-01  1.1999      2019-09  1.1999\n#     2019-10  1.1500      2022-12  1.1500\n#     2023-01  1.1200      2023-02  1.1200\n#\n# WHY THIS IS A SEED AND NOT A CONSTANT\n# stg_olxuz_payments carries history back to 2015-09. A flat /1.12\n# backfill overstates net revenue by 2.7% for 2020-2022 and by 12%\n# before 2019. Validated both ways after switching to this table:\n#     2026-08 (12%)  Trino 10,266.6 vs eu_bi 10,263.6 mln UZS  (+0.03%)\n#     2021-06 (15%)  Trino  2,950.6 vs eu_bi  2,950.8 mln UZS  (-0.01%)"
+ },
+ "g_fct": {
+  "name": "fct_olxuz_payments",
+  "status": "new",
+  "cls": "new",
+  "path": "models/gold/olxuz/fct_olxuz_payments.sql  (proposed)",
+  "note": "The mart. Every business rule lands here, once. One row per payment, so a distinct count of paying listers stays correct at any grain.",
+  "full": "-- One row per payment, fully dimensioned. This is the only place the\n-- business rules live: product_type -> revenue_stream, the finance\n-- category, and net derived from gross.\n--\n-- VALIDATED against yamato eu_bi.fact_payments (2026-09-15):\n--   totals    2026-08  +0.03%   |  2021-06  -0.01%\n--   product_type  18,152 of 18,152 payments agree in a row-level join\n--   finance cat   17,527 of 18,152 agree (98.2% of money); of the 625\n--                 mismatches only 2 are logic, the rest are ads whose\n--                 category_id is missing from dim_categories.\n--\n-- KNOWN LIMIT -- do not publish a category split on this yet:\n--   * packet purchases carry no ad_id: 10.3% of 2026-08 revenue, all NNL,\n--     lands in 'unattributed'. eu_bi attributes it via a synthetic\n--     listing_nk = -1 row carrying the packet's own category; we have no\n--     equivalent until bronze.olxuz_nnl_categoriespackets is wired in.\n--   * a further 2.2% has a category_id absent from dim_categories\n--     (bronze.olxuz_categories stops at id 2099).\n--   * backwards it collapses -- 2021-06 is 86.5% unattributed, because\n--     stg_olxuz_ads is current state and those ads are long deleted.\n--   Revenue TOTALS are correct at any date. The split is not.\n\n{{ config(\n    materialized='incremental',\n    incremental_strategy='merge',\n    unique_key='payment_id',\n    on_schema_change='sync_all_columns',\n    properties={\n        'partitioning': \"ARRAY['month(payment_date)']\"\n    }\n) }}\n\n{% set daily_rent_l2 = [1511, 1515] %}\n{% set daily_rent_l3 = [31, 331] %}\n\nwith payments as (\n    select *\n    from {{ ref('stg_olxuz_payments_current') }}\n    where not is_topup\n    {% if is_incremental() %}\n        and payment_date >= date '{{ var(\"source_date\") }}' - interval '2' day\n    {% endif %}\n),\n\nenriched as (\n    select\n        p.payment_id,\n        p.payment_date,\n        p.payment_ts_local,\n        p.user_id,\n        p.ad_id,\n        p.product_id,\n        p.product_name_local,\n        p.amount_gross_uzs,\n        v.vat_rate,\n        coalesce(i.product_type, 'nnl') as product_type,\n        c.category_id,\n        c.category_l1_id,\n        c.category_l1_ru,\n        c.category_l2_id,\n        -- daily rent is the ONE case (L1, L2) cannot decide\n        c.category_l2_id in ({{ daily_rent_l2 | join(', ') }})\n            and (\n                c.category_id in ({{ daily_rent_l3 | join(', ') }})\n                or c.parent_id in ({{ daily_rent_l3 | join(', ') }})\n            ) as is_daily_rent,\n        f.finance_category_1,\n        f.finance_category_2\n    from payments as p\n    left join {{ ref('stg_olxuz_paidads_indexes') }} as i\n        on i.product_id = p.product_id\n    left join {{ ref('stg_olxuz_ads') }} as a\n        on a.id = p.ad_id\n    left join {{ ref('dim_categories') }} as c\n        on c.category_id = a.category_id\n    left join {{ ref('seed_map_finance_categories') }} as f\n        on f.l1_id = c.category_l1_id\n       and f.l2_id = c.category_l2_id\n    inner join {{ ref('seed_vat_rates') }} as v\n        on p.payment_date >= v.valid_from\n       and p.payment_date <  v.valid_to\n)\n\nselect\n    e.payment_id,\n    e.payment_date,\n    e.payment_ts_local,\n    e.user_id,\n    e.ad_id,\n    e.product_id,\n    e.product_name_local,\n    e.product_type,\n\n    case\n        when e.product_type in ('topupaccount', 'removecredits')\n            then 'Not Revenue'\n        when e.product_type = 'paid_subscription' then 'Subscriptions'\n        when e.product_type = 'nnl'               then 'Listing fees'\n        else 'Promotional fees'\n    end                                              as revenue_stream,\n\n    case\n        when e.product_type in ('topupaccount', 'removecredits', 'nnl',\n                                'paid_subscription') then false\n        else true\n    end                                              as is_vas,\n\n    e.category_id,\n    e.category_l1_id,\n    e.category_l1_ru,\n    case\n        when e.is_daily_rent then 'Services'\n        else coalesce(e.finance_category_1, 'unattributed')\n    end                                              as finance_category_1,\n    case\n        when e.is_daily_rent then 'Services'\n        else coalesce(e.finance_category_2, 'unattributed')\n    end                                              as finance_category_2,\n\n    e.amount_gross_uzs,\n    e.amount_gross_uzs / (1 + e.vat_rate)            as amount_net_uzs,\n    e.vat_rate\nfrom enriched as e"
+ }
+}
+</script>
+
+<script>
+(function () {
+  var M = {
+    b_categories: {
+      name: "bronze_olxuz.olxuz_categories", status: "exists", cls: "has",
+      path: "models/bronze/olxuz_source.yml",
+      note: "Documented source. One-shot overwrite snapshot of the category tree — not CDC.",
+      sql:
+"- name: olxuz_categories\n" +
+"  description: >\n" +
+"    Flattened OLX UZ category taxonomy (tree_revision 333). Grain:\n" +
+"    category_id. L1 roots have parent = 0. Nested parameters, icon, and\n" +
+"    children are out of bronze.\n" +
+"\n" +
+"-- Caveat found 2026-09-15: this snapshot stops at category_id 2099\n" +
+"-- (861 rows, ingested 2026-09-08), while ads reference 54 newer ids\n" +
+"-- in 2100-2150 across 352,275 ads. That gap is why 2.2% of revenue\n" +
+"-- cannot be attributed to a finance category."
+    },
+    b_payments: {
+      name: "bronze_olxuz.olxuz_paidads_user_payments", status: "exists", cls: "has",
+      path: "models/bronze/olxuz_source.yml",
+      note: "Registered but undocumented — a bare entry in the source list. This is the snapshot mirror: one row per payment id, no CDC duplicates. It reproduces eu_bi's 'atlas' source partition.",
+      sql:
+"tables:\n" +
+"  - name: olxuz_paidads_user_payments   # <- bare entry, needs a description\n" +
+"\n" +
+"-- Grain: one row per id. Columns that matter downstream:\n" +
+"--   id              payment id  (= eu_bi.fact_payments.payment_nk)\n" +
+"--   date            local timestamp, already Asia/Tashkent\n" +
+"--   id_user         buyer\n" +
+"--   id_ad           the ad the service was applied to; NULL for packets\n" +
+"--   id_index        product id -> paidads_indexes.id\n" +
+"--   price           SIGNED and GROSS: negative = charge, positive = top-up\n" +
+"--   name            product label as shown to the user"
+    },
+    b_indexes: {
+      name: "bronze_olxuz.olxuz_paidads_indexes", status: "exists", cls: "has",
+      path: "models/bronze/olxuz_source.yml",
+      note: "Registered but undocumented. The product catalogue — 1,720 live rows across two full dumps (2025-12-30 and 2026-08-13), so it must be deduplicated by id.",
+      sql:
+"tables:\n" +
+"  - name: olxuz_paidads_indexes         # <- bare entry, needs a description\n" +
+"\n" +
+"-- type is the same vocabulary as eu_bi.dim_products.product_type:\n" +
+"--   nnl, paid_subscription, ad_homepage, topads, pushup, bundle,\n" +
+"--   highlight, urgent, logo, topupaccount, removecredits\n" +
+"--\n" +
+"-- KNOWN GAP: max(id) here is 3371, but payments reference NNL packet\n" +
+"-- ids in the 7xxxxx range (1,181 mln UZS in 2026-08 alone). Every one\n" +
+"-- of them is product_type = 'nnl' in dim_products, so the staging model\n" +
+"-- below falls back to 'nnl' rather than dropping them."
+    },
+    b_adslog: {
+      name: "bronze_olxuz.olxuz_ads_log", status: "exists", cls: "has",
+      path: "models/bronze/olxuz_source.yml",
+      note: "Documented source with a column contract. Lazarus TSA append-only CDC log — the partitioned one, not the unpartitioned mirror.",
+      sql:
+"- name: olxuz_ads_log\n" +
+"  description: >\n" +
+"    CDC append-only log of OLX UZ ads.\n" +
+"  columns:\n" +
+"    - name: id\n" +
+"    - name: user_id\n" +
+"    - name: category_id\n" +
+"    - name: net_ad_counted\n" +
+"    - name: private_business\n" +
+"    - name: status\n" +
+"    - name: operation_timestamp\n" +
+"    - name: operation_type\n" +
+"    - name: _olam_idempotent_key\n" +
+"    - name: _olam_event_ts\n" +
+"    - name: _olam_source_ts"
+    },
+    b_paymentslog: {
+      name: "bronze_olxuz.olxuz_paidads_user_payments_log", status: "exists", cls: "has",
+      path: "models/bronze/olxuz_source.yml",
+      note: "The CDC counterpart of the snapshot. Carries history back to 2015-09, which the snapshot does not — but DUMP and insert events overlap, so raw sums run about 1.8x high.",
+      sql:
+"- name: olxuz_paidads_user_payments_log\n" +
+"  description: >\n" +
+"    CDC append-only log of OLX UZ paidads_user_payments: one row per\n" +
+"    change event, not per payment.\n" +
+"\n" +
+"-- 2026-08 as ingested: 917,997 DUMP rows covering 592,655 distinct ids,\n" +
+"-- plus 435,173 insert rows and 17 updates. Summing price across all of\n" +
+"-- them double-counts. Deduplicate by id (latest operation_timestamp)\n" +
+"-- before any arithmetic, or use the snapshot table instead."
+    },
+
+    s_categories: {
+      name: "stg_olxuz_categories", status: "exists", cls: "has",
+      path: "models/silver/static/stg_olxuz_categories.sql",
+      note: "QC-only staging. No L1 walk here — that belongs to dim_categories.",
+      sql:
+"{{ config(tags=['once']) }}\n" +
+"\n" +
+"-- Bronze stores parent = 0 on L1 roots (column is non-nullable); silver\n" +
+"-- maps that to NULL so parent is null iff level = 1.\n" +
+"\n" +
+"select\n" +
+"    category_id,\n" +
+"    nullif(parent, 0) as parent,\n" +
+"    level,\n" +
+"    name,\n" +
+"    code,\n" +
+"    type,\n" +
+"    path\n" +
+"from {{ source('bronze_olxuz', 'olxuz_categories') }}\n" +
+"where\n" +
+"    category_id is not null\n" +
+"    and level between 1 and 4\n" +
+"    and name is not null\n" +
+"    and (\n" +
+"        (level = 1 and (parent is null or parent = 0))\n" +
+"        or (level > 1 and parent is not null and parent <> 0)\n" +
+"    )"
+    },
+    s_paycur: {
+      name: "stg_olxuz_payments_current", status: "new", cls: "new",
+      path: "models/silver/olxuz/stg_olxuz_payments_current.sql  (proposed)",
+      note: "Shape only: flip the sign so revenue is positive, split top-ups out, keep gross. No VAT and no revenue buckets — those are gold's job.",
+      sql:
+"-- Current-state payments off the bronze SNAPSHOT (1 row per id), not the\n" +
+"-- CDC log. stg_olxuz_payments stays log-shaped by source contract, hence\n" +
+"-- the _current suffix.\n" +
+"\n" +
+"{{ config(\n" +
+"    materialized='incremental',\n" +
+"    incremental_strategy='merge',\n" +
+"    unique_key='payment_id',\n" +
+"    on_schema_change='sync_all_columns',\n" +
+"    properties={'partitioning': \"ARRAY['month(payment_date)']\"}\n" +
+") }}\n" +
+"\n" +
+"select\n" +
+"    cast(src.id as bigint)                        as payment_id,\n" +
+"    cast(src.date as date)                        as payment_date,\n" +
+"    with_timezone(src.date, 'Asia/Tashkent')      as payment_ts_local,\n" +
+"    src.id_user                                   as user_id,\n" +
+"    nullif(src.id_ad, 0)                          as ad_id,\n" +
+"    src.id_index                                  as product_id,\n" +
+"    src.name                                      as product_name_local,\n" +
+"    -- price is signed and gross: negative = charge, positive = top-up\n" +
+"    -src.price                                    as amount_gross_uzs,\n" +
+"    src.price > 0                                 as is_topup\n" +
+"from {{ source('bronze_olxuz', 'olxuz_paidads_user_payments') }} as src\n" +
+"where src.price <> 0\n" +
+"{% if is_incremental() %}\n" +
+"    and cast(src.date as date) >= date '{{ var(\"source_date\") }}' - interval '2' day\n" +
+"{% endif %}"
+    },
+    s_indexes: {
+      name: "stg_olxuz_paidads_indexes", status: "new", cls: "new",
+      path: "models/silver/olxuz/stg_olxuz_paidads_indexes.sql  (proposed)",
+      note: "Deduplicate the two catalogue dumps to one row per product id. Currently done inline as a subquery in every ad hoc query — which is exactly why it should be a model.",
+      sql:
+"-- Product catalogue, one row per id. Bronze holds two full dumps\n" +
+"-- (2025-12-30 and 2026-08-13): 3,440 rows for 1,720 live products.\n" +
+"\n" +
+"{{ config(materialized='table') }}\n" +
+"\n" +
+"with ranked as (\n" +
+"    select\n" +
+"        src.*,\n" +
+"        row_number() over (\n" +
+"            partition by src.id\n" +
+"            order by src._olam_event_ts desc\n" +
+"        ) as rn\n" +
+"    from {{ source('bronze_olxuz', 'olxuz_paidads_indexes') }} as src\n" +
+")\n" +
+"\n" +
+"select\n" +
+"    ranked.id       as product_id,\n" +
+"    ranked.code     as product_code,\n" +
+"    ranked.type     as product_type,\n" +
+"    ranked.duration as duration_days\n" +
+"from ranked\n" +
+"where ranked.rn = 1"
+    },
+    s_ads: {
+      name: "stg_olxuz_ads", status: "exists", cls: "has",
+      path: "models/silver/olxuz/stg_olxuz_ads.sql",
+      note: "Current-state ads, last-write-wins from the CDC log. This is the category source for the fact — use it, never bronze.olxuz_ads directly.",
+      sql:
+"-- Current-state ads: last-write-wins from stg_olxuz_ads_log. No delete rows.\n" +
+"-- net_ad_counted = 1 is a gold filter, not applied here.\n" +
+"\n" +
+"{{ config(\n" +
+"    materialized='incremental',\n" +
+"    incremental_strategy='merge',\n" +
+"    unique_key='id',\n" +
+"    properties={'partitioning': \"ARRAY['bucket(id, 16)']\"},\n" +
+"    pre_hook=\"{{ ads_delete_tombstones() }}\"\n" +
+") }}\n" +
+"\n" +
+"with latest as (\n" +
+"    select\n" +
+"        new_events.*,\n" +
+"        row_number() over (\n" +
+"            partition by new_events.id\n" +
+"            order by new_events.operation_timestamp desc,\n" +
+"                     new_events._olam_event_ts desc,\n" +
+"                     new_events._olam_ingested_at desc\n" +
+"        ) as rn\n" +
+"    from new_events\n" +
+")\n" +
+"\n" +
+"select\n" +
+"    latest.id,\n" +
+"    latest.user_id,\n" +
+"    latest.category_id,\n" +
+"    latest.private_business as ad_type,\n" +
+"    latest.net_ad_counted,\n" +
+"    latest.status\n" +
+"from latest\n" +
+"where latest.rn = 1\n" +
+"  and lower(latest.operation_type) <> 'delete'"
+    },
+    s_paylog: {
+      name: "stg_olxuz_payments", status: "off path", cls: "dead",
+      path: "models/silver/olxuz/stg_olxuz_payments.sql",
+      note: "Exists today and stays as it is. Log-shaped by source contract — QC and pre-2026 history. It must NOT feed the fact: DUMP and insert rows overlap and inflate totals about 1.8x.",
+      sql:
+"-- QC-only CDC log of bronze.olxuz_paidads_user_payments_log. No dim_*.\n" +
+"-- Keep delete events: gold 4.3 un-counts when the latest event is delete.\n" +
+"\n" +
+"{{ config(\n" +
+"    materialized='incremental',\n" +
+"    incremental_strategy='merge',\n" +
+"    unique_key='_olam_idempotent_key',\n" +
+"    properties={'partitioning': \"ARRAY['day(_olam_source_ts)']\"}\n" +
+") }}\n" +
+"\n" +
+"select\n" +
+"    cast(src.id as bigint) as id,\n" +
+"    cast(src.date as date) as payment_date,\n" +
+"    with_timezone(src.date, 'Asia/Tashkent') as payment_ts_local,\n" +
+"    src.id_ad, src.id_index, src.id_user, src.price, src.name,\n" +
+"    src.operation_type, src.operation_timestamp,\n" +
+"    src._olam_idempotent_key, src._olam_event_ts, src._olam_source_ts\n" +
+"from {{ source('bronze_olxuz', 'olxuz_paidads_user_payments_log') }} as src\n" +
+"where coalesce(src.name, '') not in (\n" +
+"        'Возврат средств администратором',\n" +
+"        'Маъмур томонидан маблағларнинг қайтарилиши')\n" +
+"  and src._olam_idempotent_key is not null"
+    },
+
+    seed_fin: {
+      name: "seed_map_finance_categories", status: "new", cls: "new",
+      path: "seeds/seed_map_finance_categories.csv  (proposed)",
+      note: "Lifted from eu_bi.map_categories_finance and verified: the finance category is fully determined by (L1, L2) across all 717 UZ leaves — with exactly one exception, daily rent, handled as an override in the fact.",
+      sql:
+"l1_id,l2_id,finance_category_1,finance_category_2\n" +
+"1,,Real estate,Real estate\n" +
+"1,1511,Real estate,Real estate      # Квартиры\n" +
+"1,1515,Real estate,Real estate      # Дома\n" +
+"1,1519,Real estate,Real estate      # Земля\n" +
+"1,1521,Real estate,Real estate      # Гаражи / стоянки\n" +
+"1,1523,Real estate,Real estate      # Коммерческие помещения\n" +
+"1,1563,Services,Services            # Посуточная аренда\n" +
+"...\n" +
+"4,,Motors,Cars&Bikes                # Транспорт\n" +
+"4,1201,For sale,Parts               # Автозапчасти и аксессуары\n" +
+"4,1101,Motors,Heavy Machinery       # Грузовые автомобили\n" +
+"...\n" +
+"-- 142 rows total.\n" +
+"--\n" +
+"-- The ONE case (L1, L2) cannot decide, applied as an override in the fact:\n" +
+"--   Квартиры (1511) and Дома (1515) split at L3 — 'Аренда посуточно'\n" +
+"--   (category_id 31 and 331) books as Services, everything else as\n" +
+"--   Real estate."
+    },
+    seed_vat: {
+      name: "seed_vat_rates", status: "new", cls: "new",
+      path: "seeds/seed_vat_rates.csv  (proposed)",
+      note: "The UZ VAT rate is not constant. Taken from eu_bi.cnfg_tax_rates and confirmed month by month against fact_payments at every boundary — gross = net + tax holds on every row, all years.",
+      sql:
+"valid_from,valid_to,vat_rate\n" +
+"1900-01-01,2019-01-01,0.00\n" +
+"2019-01-01,2019-10-01,0.20\n" +
+"2019-10-01,2023-01-01,0.15\n" +
+"2023-01-01,9999-12-31,0.12\n" +
+"\n" +
+"-- valid_to is EXCLUSIVE. Verified at the boundaries:\n" +
+"--   2019-09  gross/net = 1.1999      2019-10  gross/net = 1.1500\n" +
+"--   2022-12  gross/net = 1.1500      2023-01  gross/net = 1.1200\n" +
+"--\n" +
+"-- Why this is a seed and not a constant: stg_olxuz_payments carries\n" +
+"-- history back to 2015-09. A flat /1.12 backfill overstates net revenue\n" +
+"-- by 2.7% for 2020-2022 and by 12% before 2019."
+    },
+
+    g_dimcat: {
+      name: "dim_categories", status: "exists", cls: "has",
+      path: "models/gold/static/dim_categories.sql",
+      note: "Recursive walk from every category up to its Russian L1 and L2. Current state, not SCD — which is the same semantics eu_bi has, since its category_sk is re-synced to the listing's current category every 20 minutes.",
+      sql:
+"{{ config(tags=['once']) }}\n" +
+"\n" +
+"with recursive tree (category_id, parent_id, level, name, code, type,\n" +
+"                    category_l1_id, category_l1_ru,\n" +
+"                    category_l2_id, category_l2_ru) as (\n" +
+"    select\n" +
+"        category_id, parent as parent_id, level, name, code, type,\n" +
+"        category_id as category_l1_id,\n" +
+"        name        as category_l1_ru,\n" +
+"        cast(null as integer) as category_l2_id,\n" +
+"        cast(null as varchar) as category_l2_ru\n" +
+"    from {{ ref('stg_olxuz_categories') }}\n" +
+"    where level = 1\n" +
+"\n" +
+"    union all\n" +
+"\n" +
+"    select\n" +
+"        child.category_id, child.parent, child.level, child.name,\n" +
+"        child.code, child.type,\n" +
+"        ancestor.category_l1_id, ancestor.category_l1_ru,\n" +
+"        case when child.level = 2 then child.category_id\n" +
+"             else ancestor.category_l2_id end,\n" +
+"        case when child.level = 2 then child.name\n" +
+"             else ancestor.category_l2_ru end\n" +
+"    from {{ ref('stg_olxuz_categories') }} as child\n" +
+"    inner join tree as ancestor on child.parent = ancestor.category_id\n" +
+")\n" +
+"\n" +
+"select * from tree"
+    },
+    g_fct: {
+      name: "fct_olxuz_payments", status: "new", cls: "new",
+      path: "models/gold/olxuz/fct_olxuz_payments.sql  (proposed)",
+      note: "The mart. Every business rule lands here, once. One row per payment, so a distinct count of paying listers stays correct at any grain.",
+      sql:
+"-- One row per payment, fully dimensioned. Validated against yamato\n" +
+"-- eu_bi.fact_payments: 2026-08 +0.03%, 2021-06 -0.01%, and product_type\n" +
+"-- agrees on 18,152 of 18,152 payments in a row-level join.\n" +
+"\n" +
+"{{ config(\n" +
+"    materialized='incremental',\n" +
+"    incremental_strategy='merge',\n" +
+"    unique_key='payment_id',\n" +
+"    properties={'partitioning': \"ARRAY['month(payment_date)']\"}\n" +
+") }}\n" +
+"\n" +
+"select\n" +
+"    p.payment_id,\n" +
+"    p.payment_date,\n" +
+"    p.user_id,\n" +
+"    p.ad_id,\n" +
+"\n" +
+"    -- ---- VAS / NNL: product_type is the whole split ----\n" +
+"    coalesce(i.product_type, 'nnl')        as product_type,\n" +
+"    case\n" +
+"        when coalesce(i.product_type, 'nnl')\n" +
+"             in ('topupaccount', 'removecredits') then 'Not Revenue'\n" +
+"        when i.product_type = 'paid_subscription' then 'Subscriptions'\n" +
+"        when coalesce(i.product_type, 'nnl') = 'nnl' then 'Listing fees'\n" +
+"        else 'Promotional fees'\n" +
+"    end                                    as revenue_stream,\n" +
+"\n" +
+"    -- ---- finance category, with the daily-rent override ----\n" +
+"    case\n" +
+"        when c.category_l2_id in (1511, 1515)\n" +
+"             and (c.category_id in (31, 331) or c.parent_id in (31, 331))\n" +
+"            then 'Services'\n" +
+"        else coalesce(f.finance_category_1, 'unattributed')\n" +
+"    end                                    as finance_category_1,\n" +
+"    case\n" +
+"        when c.category_l2_id in (1511, 1515)\n" +
+"             and (c.category_id in (31, 331) or c.parent_id in (31, 331))\n" +
+"            then 'Services'\n" +
+"        else coalesce(f.finance_category_2, 'unattributed')\n" +
+"    end                                    as finance_category_2,\n" +
+"\n" +
+"    -- ---- money: gross is the source, net is derived ----\n" +
+"    p.amount_gross_uzs,\n" +
+"    p.amount_gross_uzs / (1 + v.vat_rate)  as amount_net_uzs,\n" +
+"    v.vat_rate\n" +
+"\n" +
+"from {{ ref('stg_olxuz_payments_current') }} as p\n" +
+"left join {{ ref('stg_olxuz_paidads_indexes') }} as i\n" +
+"       on i.product_id = p.product_id\n" +
+"left join {{ ref('stg_olxuz_ads') }} as a\n" +
+"       on a.id = p.ad_id\n" +
+"left join {{ ref('dim_categories') }} as c\n" +
+"       on c.category_id = a.category_id\n" +
+"left join {{ ref('seed_map_finance_categories') }} as f\n" +
+"       on f.l1_id = c.category_l1_id\n" +
+"      and f.l2_id = c.category_l2_id\n" +
+"join {{ ref('seed_vat_rates') }} as v\n" +
+"       on p.payment_date >= v.valid_from\n" +
+"      and p.payment_date <  v.valid_to\n" +
+"where not p.is_topup\n" +
+"{% if is_incremental() %}\n" +
+"    and p.payment_date >= date '{{ var(\"source_date\") }}' - interval '2' day\n" +
+"{% endif %}"
+    },
+    m_revenue: {
+      name: "revenue_total", status: "stub", cls: "has",
+      path: "models/gold/metrics/finance/revenue_total.sql",
+      note: "Today it is a stub returning nothing. Replacing it is the last step, not the first — and the catalogue entry in _metrics.yml needs fixing at the same time.",
+      sql:
+"-- TODAY (models/gold/metrics/finance/revenue_total.sql):\n" +
+"\n" +
+"{{ config(materialized='view', tags=['metric', 'finance', 'stub']) }}\n" +
+"\n" +
+"select\n" +
+"    cast(null as date) as metric_date,\n" +
+"    cast(0 as decimal(18, 2)) as revenue_total\n" +
+"where 1 = 0\n" +
+"\n" +
+"\n" +
+"-- PROPOSED — same column contract, real numbers:\n" +
+"\n" +
+"{{ config(materialized='view', tags=['metric', 'finance', 'production']) }}\n" +
+"\n" +
+"select\n" +
+"    payment_date                       as metric_date,\n" +
+"    cast(sum(amount_net_uzs) as decimal(18, 2)) as revenue_total\n" +
+"from {{ ref('fct_olxuz_payments') }}\n" +
+"where revenue_stream <> 'Not Revenue'\n" +
+"group by payment_date\n" +
+"\n" +
+"-- Also fix models/gold/metrics/_metrics.yml, which currently says:\n" +
+"--   unit: \"RUB\"                          -> UZS (or convert to USD)\n" +
+"--   source_marts: [\"gold.fct_orders (TBD)\"] -> gold.fct_olxuz_payments"
+    }
+  };
+
+  // Full model source, generated from the real files in dbt/olam.
+  var FULL = JSON.parse(document.getElementById("model-full").textContent);
+  Object.keys(FULL).forEach(function (k) {
+    M[k] = M[k] || {};
+    for (var f in FULL[k]) { M[k][f] = FULL[k][f]; }
+  });
+
+  var nodes = Array.prototype.slice.call(document.querySelectorAll(".node"));
+  var elName = document.getElementById("p-name");
+  var elStatus = document.getElementById("p-status");
+  var elPath = document.getElementById("p-path");
+  var elNote = document.getElementById("p-note");
+  var elSql = document.getElementById("p-sql");
+  var elToggle = document.getElementById("p-toggle");
+
+  var current = null;
+  var showFull = false;
+
+  function lines(t) { return t ? t.split("\n").length : 0; }
+
+  function render() {
+    var m = M[current];
+    if (!m) return;
+    var hasFull = !!m.full && m.full !== m.sql;
+    elSql.textContent = (showFull && hasFull) ? m.full : m.sql;
+    elToggle.hidden = !hasFull;
+    elToggle.setAttribute("aria-pressed", String(showFull));
+    elToggle.textContent = showFull
+      ? "Show trimmed (" + lines(m.sql) + " lines)"
+      : "Show full SQL (" + lines(m.full) + " lines)";
+  }
+
+  function select(key) {
+    if (!M[key]) return;
+    current = key;
+    showFull = false;
+    nodes.forEach(function (n) {
+      n.setAttribute("aria-pressed", String(n.getAttribute("data-key") === key));
+    });
+    var m = M[key];
+    elName.textContent = m.name;
+    elStatus.textContent = m.status;
+    elStatus.className = "pill " + m.cls;
+    elPath.textContent = m.path;
+    elNote.textContent = m.note;
+    render();
+  }
+
+  elToggle.addEventListener("click", function () {
+    showFull = !showFull;
+    render();
+    if (showFull) { elSql.parentNode.scrollTop = 0; }
+  });
+
+  nodes.forEach(function (n) {
+    var key = n.getAttribute("data-key");
+    n.addEventListener("click", function () { select(key); });
+    n.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
+        e.preventDefault();
+        select(key);
+      }
+    });
+  });
+
+  select("g_fct");
+})();
+</script>

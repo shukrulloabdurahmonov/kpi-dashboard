@@ -20,8 +20,8 @@ from pathlib import Path
 from urllib.parse import quote
 
 from flask import (
-    Flask, g, jsonify, make_response, redirect, render_template, request,
-    session, url_for,
+    Flask, Response, abort, g, jsonify, make_response, redirect,
+    render_template, request, session, url_for,
 )
 from itsdangerous import URLSafeTimedSerializer
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -75,7 +75,19 @@ DASHBOARDS = [
                     "category and region splits, top keywords with "
                     "zero-result rates.",
      "requested_by": "T-Team", "url": "/search", "tabs": SEARCH_TABS},
+    {"slug": "revenue_layering", "title": "UZ Revenue Layering",
+     "description": "Design note: bronze to gold for UZ revenue in olam — "
+                    "the wiring, what each layer may do, and the open "
+                    "decisions before building.",
+     "requested_by": "T-Team", "url": "/docs/revenue-layering", "tabs": []},
 ]
+
+# Self-contained HTML documents served verbatim (no Jinja) behind the login.
+# Each file carries its own <title>, fonts and styles; the route only adds the
+# document skeleton and a way back to the landing page.
+DOCS = {
+    "revenue-layering": "revenue_layering.html",
+}
 DASH_TITLE_BY_TAB = {
     tab_id: d["title"] for d in DASHBOARDS for tab_id, _, _ in d["tabs"]
 }
@@ -1771,6 +1783,29 @@ def create_app():
             entries.append(e)
         return render_template("landing.html", dashboards=entries,
                                request_url=JIRA_REQUEST_URL)
+
+    @app.route("/docs/<slug>")
+    def doc_page(slug):
+        name = DOCS.get(slug)
+        if not name:
+            abort(404)
+        path = Path(__file__).resolve().parent / "docs" / name
+        try:
+            body = path.read_text(encoding="utf-8")
+        except OSError:
+            abort(404)
+        html = (
+            '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+            '<meta name="viewport" content="width=device-width, initial-scale=1">'
+            '</head><body>'
+            '<a href="/" style="position:fixed;top:10px;left:12px;z-index:20;'
+            'font:600 12px/1 system-ui,sans-serif;letter-spacing:.06em;'
+            'text-transform:uppercase;color:#5A6472;text-decoration:none;'
+            'background:rgba(127,127,127,.12);padding:6px 10px;border-radius:6px">'
+            '&larr; Dashxona</a>'
+            + body + "</body></html>"
+        )
+        return Response(html, mimetype="text/html")
 
     @app.route("/player")
     def player():
