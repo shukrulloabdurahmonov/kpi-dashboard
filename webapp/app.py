@@ -80,6 +80,10 @@ DASHBOARDS = [
                     "the wiring, what each layer may do, and the open "
                     "decisions before building.",
      "requested_by": "T-Team", "url": "/docs/revenue-layering", "tabs": []},
+    {"slug": "wbr_truth_board", "title": "WBR Truth Board",
+     "description": "WBR metrics week by week: tteam Trino vs Yamato as a % "
+                    "difference, with the source tables behind every cell.",
+     "requested_by": "T-Team", "url": "/docs/wbr-truth-board", "tabs": []},
 ]
 
 # Self-contained HTML documents served verbatim (no Jinja) behind the login.
@@ -87,6 +91,7 @@ DASHBOARDS = [
 # document skeleton and a way back to the landing page.
 DOCS = {
     "revenue-layering": "revenue_layering.html",
+    "wbr-truth-board": "wbr_truth_board.html",
 }
 DASH_TITLE_BY_TAB = {
     tab_id: d["title"] for d in DASHBOARDS for tab_id, _, _ in d["tabs"]
