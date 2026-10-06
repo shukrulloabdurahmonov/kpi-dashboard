@@ -1,8 +1,8 @@
 #!/bin/bash
 # Supervisor for the OLX UZ KPI dashboard (gunicorn on :5055, fronted by Caddy).
-cd /home/claude/olx_uz_kpi_dashboard
+cd /opt/sites/olx_uz_kpi_dashboard
 export $(grep -v '^#' kpi.env | xargs -d '\n')
-export PYTHONPATH=/home/claude/olx_uz_kpi_dashboard/.venv/lib/python3.12/site-packages:/home/claude/olx_uz_kpi_dashboard
+export PYTHONPATH=/opt/sites/olx_uz_kpi_dashboard/.venv/lib/python3.12/site-packages:/opt/sites/olx_uz_kpi_dashboard
 
 while true; do
   python3 -m gunicorn \

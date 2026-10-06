@@ -1613,7 +1613,7 @@ BUILDERS = {
 
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
-OAUTH_REDIRECT_URI = "https://dash.209-38-224-32.sslip.io/auth/callback"
+OAUTH_REDIRECT_URI = "http://10.47.61.132/auth/callback"
 ALLOWED_DOMAIN = "tteam.pro"
 ALLOWED_EXTRA = {"mshcheglov1@gmail.com"}
 
@@ -1621,9 +1621,9 @@ ALLOWED_EXTRA = {"mshcheglov1@gmail.com"}
 # protected path on the bare domain; a signed cookie scoped to the PARENT
 # domain lets one Google login cover all sslip sites.
 GATE_COOKIE = "tteam_gate"
-GATE_DOMAIN = ".209-38-224-32.sslip.io"
+GATE_DOMAIN = os.environ.get("GATE_DOMAIN", "")  # "" = host-only cookie (OLX VPS, single host, plain http)
 GATE_MAX_AGE = 30 * 86400
-ALLOWED_NEXT_HOSTS = {"209-38-224-32.sslip.io", "dash.209-38-224-32.sslip.io"}
+ALLOWED_NEXT_HOSTS = {"209-38-224-32.sslip.io", "dash.209-38-224-32.sslip.io", os.environ.get("SITES_HOST", "10.47.61.132"), os.environ.get("SITES_HOST", "10.47.61.132") + ":5055"}
 
 
 def _safe_next(nxt):
@@ -1660,6 +1660,8 @@ def create_app():
 
     @app.before_request
     def require_login():
+        if os.environ.get("KPI_NO_AUTH") == "1":  # VPN-only host: network is the boundary
+            return None
         if request.endpoint in ("login", "health", "static",
                                 "auth_start", "auth_callback", "gate_verify"):
             return None
@@ -1754,10 +1756,10 @@ def create_app():
                 return resp
             except Exception:
                 pass
-        host = request.headers.get("X-Forwarded-Host", "209-38-224-32.sslip.io")
+        host = request.headers.get("X-Forwarded-Host", os.environ.get("SITES_HOST", "10.47.61.132"))
         uri = request.headers.get("X-Forwarded-Uri", "/")
-        target = "https://" + host + uri
-        return redirect("https://dash.209-38-224-32.sslip.io/auth/login?"
+        target = ("http://" if os.environ.get("SITES_INSECURE") == "1" else "https://") + host + uri
+        return redirect("http://10.47.61.132/auth/login?"
                         + urllib.parse.urlencode({"next": target}))
 
     @app.route("/logout")

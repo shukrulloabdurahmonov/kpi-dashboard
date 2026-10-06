@@ -2,8 +2,8 @@
 # Nightly rolling refresh from yamato (via the reverse-SSH tunnel on :15432),
 # then atomic local publish of the snapshot the webapp serves.
 # The tunnel flaps, so retry a few times before giving up until tomorrow.
-cd /home/claude/olx_uz_kpi_dashboard
-export PYTHONPATH=/home/claude/olx_uz_kpi_dashboard
+cd /opt/sites/olx_uz_kpi_dashboard
+export PYTHONPATH=/opt/sites/olx_uz_kpi_dashboard
 
 # Search dashboard data arrives via git as payloads/search_payload.sqlite
 # (the Mac extracts it from Trino + hydra, which this box can't reach).
