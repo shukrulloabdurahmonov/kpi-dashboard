@@ -124,16 +124,17 @@ def spec_stats(conn, metric_names, dim_names=None):
     return n or 0, latest
 
 
-def prune_old_periods(conn, grain, min_key, exempt_prefix="search_"):
+def prune_old_periods(conn, grain, min_key, exempt_prefixes=("search_", "wbr_")):
     """Enforce the retention window: drop periods older than min_key at a
     grain (extraction only bounds what is ADDED; this bounds what is kept).
-    Metrics under exempt_prefix are owned by updater.search_merge, which
-    enforces its own retention — the registry windows must not touch them."""
+    Metrics under exempt_prefixes are owned by updater.search_merge /
+    updater.wbr_merge, which manage their own history — the registry windows
+    must not touch them."""
+    clause = " AND ".join("metric NOT LIKE ?" for _ in exempt_prefixes)
     with conn:
         cur = conn.execute(
-            "DELETE FROM metrics WHERE grain = ? AND period < ? "
-            "AND metric NOT LIKE ?",
-            (grain, min_key, exempt_prefix + "%"))
+            "DELETE FROM metrics WHERE grain = ? AND period < ? AND " + clause,
+            [grain, min_key] + [p + "%" for p in exempt_prefixes])
     return cur.rowcount
 
 

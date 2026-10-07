@@ -26,7 +26,7 @@ from flask import (
 from itsdangerous import URLSafeTimedSerializer
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from webapp import data
+from webapp import data, wbr
 from webapp.definitions import METRIC_DEFS, info
 
 KPI_TABS = [
@@ -1790,6 +1790,16 @@ def create_app():
             entries.append(e)
         return render_template("landing.html", dashboards=entries,
                                request_url=JIRA_REQUEST_URL)
+
+    @app.route("/api/wbr-truth-board")
+    def api_wbr_truth_board():
+        """Weekly tteam Trino vs Yamato grid for /docs/wbr-truth-board."""
+        if not data.available():
+            return jsonify({"error": "no snapshot"}), 503
+        payload = wbr.board()
+        if payload is None:
+            return jsonify({"error": "no WBR data in the snapshot yet"}), 404
+        return jsonify(payload)
 
     @app.route("/docs/<slug>")
     def doc_page(slug):
