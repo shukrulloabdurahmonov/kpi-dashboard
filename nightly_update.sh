@@ -17,16 +17,6 @@ if [ -f payloads/search_payload.sqlite ]; then
     || echo "[$(date -u +%FT%TZ)] search merge FAILED (non-fatal)" >> logs/updater.log
 fi
 
-# WBR Truth Board data arrives the same way as payloads/wbr_payload.sqlite
-# (built by updater.wbr_extract wherever tteam Trino + Yamato are reachable).
-# Idempotent merge; --republish so a refreshed board shows up even if the
-# warehouse refresh below fails.
-if [ -f payloads/wbr_payload.sqlite ]; then
-  echo "[$(date -u +%FT%TZ)] merging wbr payload" >> logs/updater.log
-  python3 -m updater.wbr_merge payloads/wbr_payload.sqlite --republish >> logs/updater.log 2>&1 \
-    || echo "[$(date -u +%FT%TZ)] wbr merge FAILED (non-fatal)" >> logs/updater.log
-fi
-
 for attempt in 1 2 3; do
   echo "[$(date -u +%FT%TZ)] nightly refresh attempt $attempt" >> logs/updater.log
   python3 -m updater.main --local-only >> logs/updater.log 2>&1

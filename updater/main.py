@@ -28,7 +28,6 @@ from updater.periods import (  # noqa: E402
 )
 from updater.registry import GRAINS, METRICS, SPEC_BY_NAME  # noqa: E402
 from updater.search_common import SEARCH_META_NAMES  # noqa: E402
-from updater.wbr_common import WBR_META_NAMES  # noqa: E402
 
 log = logging.getLogger("updater.main")
 
@@ -83,9 +82,8 @@ def run_extraction(targets, mode, force=False):
     today = date.today()
     n_ok = n_failed = 0
     try:
-        # search_* / wbr_* meta rows are owned by their merge modules, not the registry
-        store.prune_meta(store_conn, [s.name for s in METRICS] + SEARCH_META_NAMES
-                         + WBR_META_NAMES)
+        # search_* meta rows are owned by updater.search_merge, not the registry
+        store.prune_meta(store_conn, [s.name for s in METRICS] + SEARCH_META_NAMES)
         try:
             refresh_category_tree(wh, store_conn)
         except Exception:

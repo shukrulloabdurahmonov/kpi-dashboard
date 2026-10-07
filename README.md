@@ -148,48 +148,6 @@ pruning exempts them, and `search_merge` enforces its own 90-day retention on
 the daily grain. All `*_tgv` source columns are dropped (always 0 for UZ).
 Exit codes: 0 ok · 1 fatal · 2 partial (one source failed).
 
-## WBR Truth Board refresh (`/docs/wbr-truth-board`)
-
-The board compares tteam Trino's WBR marts with Yamato, week by week. Its
-data is no longer baked into the HTML: the page fetches
-`/api/wbr-truth-board`, which `webapp/wbr.py` builds from the `wbr_*` rows in
-the snapshot.
-
-* `updater/wbr_extract.py` pulls daily site totals from **tteam Trino**
-  (`iceberg.gold.olxuz_*_daily`, `olxuz_repliers_weekly`; needs NetBird) and
-  **Yamato** (`eu_bi` / `cubes`, through `updater.db.Warehouse`). SQL:
-  `sql/wbr/`. It writes `payloads/wbr_payload.sqlite` and merges it into the
-  local store. Exit 0 ok · 1 fatal · 2 one side failed (the other is kept).
-* `updater/wbr_merge.py` merges a payload into any store (stdlib only), per
-  metric and source, so a one-sided payload never wipes the other side.
-* `nightly_update.sh` merges `payloads/wbr_payload.sqlite` before every
-  refresh, like the search payload.
-
-**Refresh on a machine that reaches both warehouses** (needs `trino` and
-`psycopg2`; on the Mac use `~/Automations/Tasks/automations_env/bin/python`):
-
-```bash
-python3 -m updater.wbr_extract --republish        # extract + publish here
-```
-
-**Ship it to the box through git** (when the extract ran elsewhere):
-
-```bash
-git add -f payloads/wbr_payload.sqlite             # -f only the first time (*.sqlite is ignored)
-git commit -m "wbr payload $(date +%F)" && git push
-# on the box: git pull && python3 -m updater.wbr_merge payloads/wbr_payload.sqlite --republish
-```
-
-Trino auth: OAuth2 by default (browser login once, then a cached token). On a
-headless machine set `TRINO_JWT`. One side only: `--no-trino` / `--no-yamato`.
-
-**Judgement calls live in `webapp/wbr.py`**, not in the data:
-`KNOWN_PARTIAL_LOADS` (date ranges dropped for a metric because the tteam load
-is short but above the 70% gap line) and `BOARD_ROWS` (each row's status chip,
-note and source tables). Update them when a reload lands, a definition
-changes in olam, or a gap is explained; no extract is needed for that, just a
-deploy/restart.
-
 ## Warehouse tunnel for the box's nightly refresh (Mac)
 
 The box's `nightly_update.sh` reads the warehouse through a reverse-SSH
